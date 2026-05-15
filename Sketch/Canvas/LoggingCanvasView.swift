@@ -3,8 +3,9 @@ import PencilKit
 import GameController
 import CoreGraphics
 
-/// PKCanvasView subclass that pins canvas.tool to a desiredTool we control and
-/// implements Shift-to-snap straight-line drawing in real time:
+/// PKCanvasView subclass that pins canvas.tool to a desiredTool we control,
+/// shows a crosshair-shaped cursor while shift is held, and implements
+/// Shift-to-snap straight-line drawing in real time:
 ///   - A CADisplayLink polls the global modifier-flag state at 60fps. When
 ///     shift goes down, drawingPolicy flips to .pencilOnly so PencilKit
 ///     stops responding to mouse input entirely.
@@ -12,7 +13,7 @@ import CoreGraphics
 ///     the cursor live, snapped to horizontal or vertical.
 ///   - On stroke end, the preview is removed and a clean dense-point stroke
 ///     is injected directly into `drawing`.
-final class LoggingCanvasView: PKCanvasView {
+final class LoggingCanvasView: PKCanvasView, UIPointerInteractionDelegate {
 
     /// The currently desired tool.
     /// `.monoline` keeps stroke width constant — `.pen` modulates width by
@@ -24,9 +25,22 @@ final class LoggingCanvasView: PKCanvasView {
     var shiftHeldForCurrentStroke: Bool = false
 
     private var shiftStrokeStart: CGPoint?
+    /// Last cursor location seen while a shift-snap stroke is in flight. Used to
+    /// commit the line when the user releases shift mid-drag.
+    private var lastShiftCursor: CGPoint?
+    /// True after a shift-snap stroke is committed because shift was released
+    /// mid-drag. Suppresses the rest of the drag so PencilKit doesn't kick in
+    /// with a free-hand stroke from the release point.
+    private var ignoreRestOfDrag: Bool = false
     private var previewLayer: CAShapeLayer?
     private var displayLink: CADisplayLink?
     private var globalShiftDown: Bool = false
+
+    /// Tracks the current mouse position so we can pin the shift-indicator
+    /// crosshair to it.
+    private var cursorLocation: CGPoint = .zero
+    private var crosshairLayer: CALayer?
+    private weak var pointerInteractionRef: UIPointerInteraction?
 
     /// Renders should look the same thickness as a free-hand stroke. With
     /// monoline, the size value lands at roughly half the visual width once
@@ -41,8 +55,43 @@ final class LoggingCanvasView: PKCanvasView {
         super.didMoveToWindow()
         if window != nil {
             startShiftPolling()
+            installHoverGestureIfNeeded()
+            installPointerInteractionIfNeeded()
         } else {
             stopShiftPolling()
+        }
+    }
+
+    private func installPointerInteractionIfNeeded() {
+        guard pointerInteractionRef == nil else { return }
+        let interaction = UIPointerInteraction(delegate: self)
+        addInteraction(interaction)
+        pointerInteractionRef = interaction
+    }
+
+    // MARK: UIPointerInteractionDelegate
+
+    func pointerInteraction(_ interaction: UIPointerInteraction,
+                            styleFor region: UIPointerRegion) -> UIPointerStyle? {
+        // Hide the system pointer while shift is held — the crosshair
+        // overlay layer takes over as the cursor.
+        if globalShiftDown { return UIPointerStyle.hidden() }
+        return nil
+    }
+
+    private var hoverRecognizer: UIHoverGestureRecognizer?
+
+    private func installHoverGestureIfNeeded() {
+        guard hoverRecognizer == nil else { return }
+        let hover = UIHoverGestureRecognizer(target: self, action: #selector(handleHover(_:)))
+        addGestureRecognizer(hover)
+        hoverRecognizer = hover
+    }
+
+    @objc private func handleHover(_ recognizer: UIHoverGestureRecognizer) {
+        cursorLocation = recognizer.location(in: self)
+        if globalShiftDown {
+            updateCrosshairPosition()
         }
     }
 
@@ -87,14 +136,28 @@ final class LoggingCanvasView: PKCanvasView {
             // Prevent PencilKit from responding to any mouse touch while
             // shift is held — we take over drawing.
             drawingPolicy = .pencilOnly
+            showCrosshair()
+            pointerInteractionRef?.invalidate()
         } else {
-            drawingPolicy = .anyInput
-            // If shift was released mid-stroke, drop any in-flight preview.
-            if shiftHeldForCurrentStroke {
+            // Shift released. If a shift-snap stroke is in progress, commit
+            // it as a real stroke so the user doesn't lose what they drew.
+            // The rest of the drag is then ignored.
+            if shiftHeldForCurrentStroke,
+               let start = shiftStrokeStart,
+               let cursor = lastShiftCursor {
+                let end = snapped(from: start, to: cursor)
+                finishShiftStroke(from: start, to: end)
+                ignoreRestOfDrag = true
+            } else {
+                // No active shift drag — just clean up.
                 removePreviewLayer()
                 shiftStrokeStart = nil
+                lastShiftCursor = nil
                 shiftHeldForCurrentStroke = false
             }
+            drawingPolicy = .anyInput
+            hideCrosshair()
+            pointerInteractionRef?.invalidate()
         }
     }
 
@@ -102,12 +165,14 @@ final class LoggingCanvasView: PKCanvasView {
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         enforceDesiredTool()
+        ignoreRestOfDrag = false
         if globalShiftDown,
            let touch = touches.first,
            let inking = desiredTool as? PKInkingTool {
             shiftHeldForCurrentStroke = true
             let start = touch.location(in: self)
             shiftStrokeStart = start
+            lastShiftCursor = start
             showPreviewLayer(color: inking.color, width: inking.width)
             updatePreviewLayer(from: start, to: start)
             return
@@ -117,10 +182,17 @@ final class LoggingCanvasView: PKCanvasView {
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        if let touch = touches.first {
+            cursorLocation = touch.location(in: self)
+            if globalShiftDown { updateCrosshairPosition() }
+        }
+        if ignoreRestOfDrag { return }
         if shiftHeldForCurrentStroke,
            let start = shiftStrokeStart,
            let touch = touches.first {
-            let snapped = snapped(from: start, to: touch.location(in: self))
+            let cur = touch.location(in: self)
+            lastShiftCursor = cur
+            let snapped = snapped(from: start, to: cur)
             updatePreviewLayer(from: start, to: snapped)
             return
         }
@@ -128,6 +200,10 @@ final class LoggingCanvasView: PKCanvasView {
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        if ignoreRestOfDrag {
+            ignoreRestOfDrag = false
+            return
+        }
         if shiftHeldForCurrentStroke,
            let start = shiftStrokeStart,
            let touch = touches.first {
@@ -139,9 +215,14 @@ final class LoggingCanvasView: PKCanvasView {
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        if ignoreRestOfDrag {
+            ignoreRestOfDrag = false
+            return
+        }
         if shiftHeldForCurrentStroke {
             removePreviewLayer()
             shiftStrokeStart = nil
+            lastShiftCursor = nil
             shiftHeldForCurrentStroke = false
             return
         }
@@ -159,6 +240,7 @@ final class LoggingCanvasView: PKCanvasView {
     private func finishShiftStroke(from start: CGPoint, to end: CGPoint) {
         removePreviewLayer()
         shiftStrokeStart = nil
+        lastShiftCursor = nil
         shiftHeldForCurrentStroke = false
 
         // Don't write degenerate "tap with no movement" strokes.
@@ -195,9 +277,15 @@ final class LoggingCanvasView: PKCanvasView {
         let path = PKStrokePath(controlPoints: points, creationDate: Date())
         let stroke = PKStroke(ink: ink, path: path)
 
+        // Temporarily relax drawingPolicy while assigning, in case PencilKit
+        // rejects programmatic edits while in .pencilOnly mode.
+        let savedPolicy = drawingPolicy
+        drawingPolicy = .anyInput
         var newDrawing = drawing
         newDrawing.strokes.append(stroke)
         drawing = newDrawing
+        drawingPolicy = savedPolicy
+        setNeedsDisplay()
     }
 
     // MARK: - Preview layer
@@ -230,5 +318,67 @@ final class LoggingCanvasView: PKCanvasView {
     private func removePreviewLayer() {
         previewLayer?.removeFromSuperlayer()
         previewLayer = nil
+    }
+
+    // MARK: - Shift crosshair indicator
+
+    /// The crosshair is centred exactly on the cursor (system pointer is
+    /// hidden while shift is held, so the crosshair *is* the cursor).
+    private static let crosshairOffset = CGSize(width: 0, height: 0)
+    private static let crosshairSize: CGFloat = 22
+
+    private func showCrosshair() {
+        if crosshairLayer != nil { return }
+        let layer = makeCrosshairLayer()
+        self.layer.addSublayer(layer)
+        crosshairLayer = layer
+        updateCrosshairPosition()
+    }
+
+    private func hideCrosshair() {
+        crosshairLayer?.removeFromSuperlayer()
+        crosshairLayer = nil
+    }
+
+    private func updateCrosshairPosition() {
+        guard let layer = crosshairLayer else { return }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        layer.position = CGPoint(
+            x: cursorLocation.x + Self.crosshairOffset.width,
+            y: cursorLocation.y + Self.crosshairOffset.height
+        )
+        CATransaction.commit()
+    }
+
+    private func makeCrosshairLayer() -> CALayer {
+        let size = Self.crosshairSize
+        let container = CALayer()
+        container.bounds = CGRect(x: 0, y: 0, width: size, height: size)
+
+        let strokeColor = (desiredTool as? PKInkingTool)?.color.cgColor ?? UIColor.black.cgColor
+        let lineWidth: CGFloat = 1.6
+
+        let hLine = CAShapeLayer()
+        let hPath = UIBezierPath()
+        hPath.move(to: CGPoint(x: 0, y: size / 2))
+        hPath.addLine(to: CGPoint(x: size, y: size / 2))
+        hLine.path = hPath.cgPath
+        hLine.strokeColor = strokeColor
+        hLine.lineWidth = lineWidth
+        hLine.lineCap = .round
+
+        let vLine = CAShapeLayer()
+        let vPath = UIBezierPath()
+        vPath.move(to: CGPoint(x: size / 2, y: 0))
+        vPath.addLine(to: CGPoint(x: size / 2, y: size))
+        vLine.path = vPath.cgPath
+        vLine.strokeColor = strokeColor
+        vLine.lineWidth = lineWidth
+        vLine.lineCap = .round
+
+        container.addSublayer(hLine)
+        container.addSublayer(vLine)
+        return container
     }
 }
