@@ -11,7 +11,7 @@ struct AboutView: View {
 
             VStack(alignment: .leading, spacing: 18) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text("Sketch")
+                    Text("AIPeek")
                         .font(.title.bold())
                     Text("ver 1.0")
                         .font(.caption)
@@ -55,7 +55,7 @@ struct AboutView: View {
 
                 Text("保存先")
                     .font(.headline)
-                Text("~/Library/Application Support/com.giftten.sketch/sessions/YYYY-MM-DD/sketch_HH-MM-SS.png")
+                Text("~/Library/Application Support/com.giftten.aipeek/sessions/YYYY-MM-DD/sketch_HH-MM-SS.png")
                     .font(.system(.caption, design: .monospaced))
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)

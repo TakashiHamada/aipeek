@@ -1,7 +1,7 @@
 import SwiftUI
 
 extension Notification.Name {
-    static let showPreferences = Notification.Name("com.giftten.sketch.showPreferences")
+    static let showPreferences = Notification.Name("com.giftten.aipeek.showPreferences")
 }
 
 @main

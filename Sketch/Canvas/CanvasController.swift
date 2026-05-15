@@ -31,7 +31,7 @@ final class CanvasController: ObservableObject {
     /// file is fresh by the time the user thinks to share it.
     private static let autoSaveDebounceNs: UInt64 = 500_000_000
 
-    private let log = Logger(subsystem: "com.giftten.sketch", category: "controller")
+    private let log = Logger(subsystem: "com.giftten.aipeek", category: "controller")
 
     // MARK: - Setup
 

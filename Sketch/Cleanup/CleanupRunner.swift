@@ -2,7 +2,7 @@ import Foundation
 import os
 
 enum CleanupRunner {
-    private static let log = Logger(subsystem: "com.giftten.sketch", category: "cleanup")
+    private static let log = Logger(subsystem: "com.giftten.aipeek", category: "cleanup")
 
     /// Run cleanup once at startup. No-op if there is no sessions folder yet.
     static func runOnLaunch(retentionDays: Int) {

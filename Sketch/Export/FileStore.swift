@@ -1,7 +1,7 @@
 import Foundation
 
 enum FileStore {
-    static let bundleFolderName = "com.giftten.sketch"
+    static let bundleFolderName = "com.giftten.aipeek"
     static let sessionsFolderName = "sessions"
     static let configFileName = "config.json"
 
