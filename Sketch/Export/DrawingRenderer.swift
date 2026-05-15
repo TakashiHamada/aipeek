@@ -4,6 +4,9 @@ import PencilKit
 enum DrawingRenderer {
     static let margin: CGFloat = 20
     static let scale: CGFloat = 2.0
+    /// Canvas/background color. Same for live canvas and exported PNG so
+    /// what you see matches what you save. Lives in Theme so the whole app stays in sync.
+    static var canvasBackground: UIColor { Theme.canvasBackgroundUI }
 
     enum RenderError: Error {
         case emptyDrawing
@@ -30,7 +33,7 @@ enum DrawingRenderer {
 
         let renderer = UIGraphicsImageRenderer(size: expanded.size, format: format)
         return renderer.image { ctx in
-            UIColor.white.setFill()
+            canvasBackground.setFill()
             ctx.fill(CGRect(origin: .zero, size: expanded.size))
             drawingImage.draw(in: CGRect(origin: .zero, size: expanded.size))
         }

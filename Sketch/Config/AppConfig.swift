@@ -1,20 +1,24 @@
 import Foundation
 
 struct AppConfig: Codable {
+    var autoSave: Bool
     var retentionDays: Int
 
-    static let `default` = AppConfig(retentionDays: 1)
+    static let `default` = AppConfig(autoSave: true, retentionDays: 1)
 
     enum CodingKeys: String, CodingKey {
+        case autoSave
         case retentionDays
     }
 
-    init(retentionDays: Int) {
+    init(autoSave: Bool, retentionDays: Int) {
+        self.autoSave = autoSave
         self.retentionDays = retentionDays
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.autoSave = (try? container.decodeIfPresent(Bool.self, forKey: .autoSave)) ?? AppConfig.default.autoSave
         self.retentionDays = (try? container.decodeIfPresent(Int.self, forKey: .retentionDays)) ?? AppConfig.default.retentionDays
     }
 
@@ -27,6 +31,21 @@ struct AppConfig: Codable {
             return try JSONDecoder().decode(AppConfig.self, from: data)
         } catch {
             return .default
+        }
+    }
+
+    func save(to url: URL) {
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            let data = try encoder.encode(self)
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try data.write(to: url, options: .atomic)
+        } catch {
+            // Non-fatal: persist next time
         }
     }
 }

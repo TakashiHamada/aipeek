@@ -13,4 +13,13 @@ enum ClipboardWriter {
         }
         UIPasteboard.general.setItems([item])
     }
+
+    /// Write only an absolute file path as plain text. Used by auto-save to keep
+    /// the reserved path always pasteable into Claude Code without overwriting
+    /// the user's image clipboard from elsewhere.
+    static func writePath(_ path: String) {
+        UIPasteboard.general.setItems([
+            [UTType.utf8PlainText.identifier: path]
+        ])
+    }
 }

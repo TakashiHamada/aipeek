@@ -1,29 +1,40 @@
 import SwiftUI
 
+extension Notification.Name {
+    static let showPreferences = Notification.Name("com.giftten.sketch.showPreferences")
+}
+
 @main
 struct SketchApp: App {
+    @StateObject private var settings: AppSettings
+
     init() {
-        do {
-            try FileStore.ensureAppSupportRoot()
-        } catch {
-            // Non-fatal: cleanup and save may still fail later and surface to the user.
-        }
-        let config = AppConfig.load(from: FileStore.configFileURL)
-        CleanupRunner.runOnLaunch(retentionDays: config.retentionDays)
+        try? FileStore.ensureAppSupportRoot()
+        let initial = AppSettings()
+        self._settings = StateObject(wrappedValue: initial)
+        CleanupRunner.runOnLaunch(retentionDays: initial.retentionDays)
     }
 
     var body: some Scene {
         WindowGroup {
-            NavigationStack {
-                ContentView()
-            }
-            .frame(minWidth: 600, minHeight: 400)
+            ContentView()
+                .environmentObject(settings)
+                .frame(minWidth: 600, minHeight: 400)
+                // Force light appearance for the whole app. PencilKit's PKInkingTool
+                // colors auto-invert based on the interface style (black ↔ white) so
+                // on a dark-mode Mac, .black ink renders as white and is invisible.
+                .preferredColorScheme(.light)
         }
         .defaultSize(width: 1000, height: 700)
         .commands {
             CommandGroup(replacing: .newItem) {
-                // Hide default "New Window" / "New Document" since we are single-window.
                 EmptyView()
+            }
+            CommandGroup(after: .appSettings) {
+                Button("環境設定...") {
+                    NotificationCenter.default.post(name: .showPreferences, object: nil)
+                }
+                .keyboardShortcut(",", modifiers: .command)
             }
         }
     }

@@ -11,7 +11,6 @@
 		CC000000000000000000CC03 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000000000000000000BB03 /* ContentView.swift */; };
 		CC000000000000000000CC04 /* CanvasView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000000000000000000BB04 /* CanvasView.swift */; };
 		CC000000000000000000CC05 /* CanvasController.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000000000000000000BB05 /* CanvasController.swift */; };
-		CC000000000000000000CC06 /* ToolPickerCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000000000000000000BB06 /* ToolPickerCoordinator.swift */; };
 		CC000000000000000000CC07 /* DrawingRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000000000000000000BB07 /* DrawingRenderer.swift */; };
 		CC000000000000000000CC08 /* ClipboardWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000000000000000000BB08 /* ClipboardWriter.swift */; };
 		CC000000000000000000CC09 /* FileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000000000000000000BB09 /* FileStore.swift */; };
@@ -20,6 +19,12 @@
 		CC000000000000000000CC0C /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000000000000000000BB0C /* AppConfig.swift */; };
 		CC000000000000000000CC0D /* ToastView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000000000000000000BB0D /* ToastView.swift */; };
 		CC000000000000000000CC0F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BB000000000000000000BB0F /* Assets.xcassets */; };
+		CC000000000000000000CC13 /* LoggingCanvasView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000000000000000000BB13 /* LoggingCanvasView.swift */; };
+		CC000000000000000000CC14 /* TitleBarTuner.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000000000000000000BB14 /* TitleBarTuner.swift */; };
+		CC000000000000000000CC15 /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000000000000000000BB15 /* AboutView.swift */; };
+		CC000000000000000000CC16 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000000000000000000BB16 /* Theme.swift */; };
+		CC000000000000000000CC17 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000000000000000000BB17 /* AppSettings.swift */; };
+		CC000000000000000000CC18 /* PreferencesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000000000000000000BB18 /* PreferencesView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -28,7 +33,6 @@
 		BB000000000000000000BB03 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		BB000000000000000000BB04 /* CanvasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CanvasView.swift; sourceTree = "<group>"; };
 		BB000000000000000000BB05 /* CanvasController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CanvasController.swift; sourceTree = "<group>"; };
-		BB000000000000000000BB06 /* ToolPickerCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolPickerCoordinator.swift; sourceTree = "<group>"; };
 		BB000000000000000000BB07 /* DrawingRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrawingRenderer.swift; sourceTree = "<group>"; };
 		BB000000000000000000BB08 /* ClipboardWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardWriter.swift; sourceTree = "<group>"; };
 		BB000000000000000000BB09 /* FileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileStore.swift; sourceTree = "<group>"; };
@@ -39,6 +43,12 @@
 		BB000000000000000000BB0E /* Sketch.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Sketch.entitlements; sourceTree = "<group>"; };
 		BB000000000000000000BB0F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		BB000000000000000000BB10 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		BB000000000000000000BB13 /* LoggingCanvasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoggingCanvasView.swift; sourceTree = "<group>"; };
+		BB000000000000000000BB14 /* TitleBarTuner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TitleBarTuner.swift; sourceTree = "<group>"; };
+		BB000000000000000000BB15 /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
+		BB000000000000000000BB16 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		BB000000000000000000BB17 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
+		BB000000000000000000BB18 /* PreferencesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -78,6 +88,7 @@
 				AA000000000000000000AA07 /* Cleanup */,
 				AA000000000000000000AA08 /* Config */,
 				AA000000000000000000AA09 /* UI */,
+				AA000000000000000000AA14 /* Support */,
 				BB000000000000000000BB10 /* Info.plist */,
 				BB000000000000000000BB0E /* Sketch.entitlements */,
 				BB000000000000000000BB0F /* Assets.xcassets */,
@@ -90,9 +101,17 @@
 			children = (
 				BB000000000000000000BB04 /* CanvasView.swift */,
 				BB000000000000000000BB05 /* CanvasController.swift */,
-				BB000000000000000000BB06 /* ToolPickerCoordinator.swift */,
+				BB000000000000000000BB13 /* LoggingCanvasView.swift */,
 			);
 			path = Canvas;
+			sourceTree = "<group>";
+		};
+		AA000000000000000000AA14 /* Support */ = {
+			isa = PBXGroup;
+			children = (
+				BB000000000000000000BB14 /* TitleBarTuner.swift */,
+			);
+			path = Support;
 			sourceTree = "<group>";
 		};
 		AA000000000000000000AA06 /* Export */ = {
@@ -118,6 +137,7 @@
 			isa = PBXGroup;
 			children = (
 				BB000000000000000000BB0C /* AppConfig.swift */,
+				BB000000000000000000BB17 /* AppSettings.swift */,
 			);
 			path = Config;
 			sourceTree = "<group>";
@@ -126,6 +146,9 @@
 			isa = PBXGroup;
 			children = (
 				BB000000000000000000BB0D /* ToastView.swift */,
+				BB000000000000000000BB15 /* AboutView.swift */,
+				BB000000000000000000BB16 /* Theme.swift */,
+				BB000000000000000000BB18 /* PreferencesView.swift */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -203,7 +226,6 @@
 				CC000000000000000000CC03 /* ContentView.swift in Sources */,
 				CC000000000000000000CC04 /* CanvasView.swift in Sources */,
 				CC000000000000000000CC05 /* CanvasController.swift in Sources */,
-				CC000000000000000000CC06 /* ToolPickerCoordinator.swift in Sources */,
 				CC000000000000000000CC07 /* DrawingRenderer.swift in Sources */,
 				CC000000000000000000CC08 /* ClipboardWriter.swift in Sources */,
 				CC000000000000000000CC09 /* FileStore.swift in Sources */,
@@ -211,6 +233,12 @@
 				CC000000000000000000CC0B /* CleanupRunner.swift in Sources */,
 				CC000000000000000000CC0C /* AppConfig.swift in Sources */,
 				CC000000000000000000CC0D /* ToastView.swift in Sources */,
+				CC000000000000000000CC13 /* LoggingCanvasView.swift in Sources */,
+				CC000000000000000000CC14 /* TitleBarTuner.swift in Sources */,
+				CC000000000000000000CC15 /* AboutView.swift in Sources */,
+				CC000000000000000000CC16 /* Theme.swift in Sources */,
+				CC000000000000000000CC17 /* AppSettings.swift in Sources */,
+				CC000000000000000000CC18 /* PreferencesView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
