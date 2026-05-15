@@ -42,6 +42,13 @@ final class LoggingCanvasView: PKCanvasView, UIPointerInteractionDelegate {
     private var crosshairLayer: CALayer?
     private weak var pointerInteractionRef: UIPointerInteraction?
 
+    /// While drawing with the red marker, the existing non-red strokes are
+    /// rendered into this image view and placed *on top* of the canvas. The
+    /// in-progress red stroke ends up visually beneath them — same effect as
+    /// the post-stroke z-order reordering done by the coordinator, but live.
+    private var blackStrokesOverlay: UIImageView?
+    private var isInRedDrawingMode: Bool = false
+
     /// Renders should look the same thickness as a free-hand stroke. With
     /// monoline, the size value lands at roughly half the visual width once
     /// PencilKit rasterizes it, so we double it.
@@ -178,6 +185,15 @@ final class LoggingCanvasView: PKCanvasView, UIPointerInteractionDelegate {
             return
         }
         shiftHeldForCurrentStroke = false
+
+        // Red marker: overlay existing non-red strokes on top of the canvas so
+        // the in-progress red stroke ends up visually beneath them, mirroring
+        // the z-order the coordinator will apply once the stroke finishes.
+        if Self.isRedInkingTool(desiredTool) {
+            showBlackStrokesOverlay()
+            isInRedDrawingMode = true
+        }
+
         super.touchesBegan(touches, with: event)
     }
 
@@ -211,6 +227,10 @@ final class LoggingCanvasView: PKCanvasView, UIPointerInteractionDelegate {
             finishShiftStroke(from: start, to: end)
             return
         }
+        if isInRedDrawingMode {
+            hideBlackStrokesOverlay()
+            isInRedDrawingMode = false
+        }
         super.touchesEnded(touches, with: event)
     }
 
@@ -225,6 +245,10 @@ final class LoggingCanvasView: PKCanvasView, UIPointerInteractionDelegate {
             lastShiftCursor = nil
             shiftHeldForCurrentStroke = false
             return
+        }
+        if isInRedDrawingMode {
+            hideBlackStrokesOverlay()
+            isInRedDrawingMode = false
         }
         super.touchesCancelled(touches, with: event)
     }
@@ -350,6 +374,44 @@ final class LoggingCanvasView: PKCanvasView, UIPointerInteractionDelegate {
         )
         CATransaction.commit()
     }
+
+    // MARK: - Red-marker overlay
+
+    private func showBlackStrokesOverlay() {
+        let nonRedStrokes = drawing.strokes.filter { !Self.isRedStroke($0) }
+        guard !nonRedStrokes.isEmpty else { return }
+        let bottomDrawing = PKDrawing(strokes: nonRedStrokes)
+        let renderRect = CGRect(origin: .zero, size: bounds.size)
+        let scale = window?.screen.scale ?? 2.0
+        let image = bottomDrawing.image(from: renderRect, scale: scale)
+
+        let iv = UIImageView(image: image)
+        iv.frame = renderRect
+        iv.isUserInteractionEnabled = false
+        iv.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        addSubview(iv)
+        blackStrokesOverlay = iv
+    }
+
+    private func hideBlackStrokesOverlay() {
+        blackStrokesOverlay?.removeFromSuperview()
+        blackStrokesOverlay = nil
+    }
+
+    static func isRedInkingTool(_ tool: PKTool) -> Bool {
+        guard let inking = tool as? PKInkingTool else { return false }
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        inking.color.getRed(&r, green: &g, blue: &b, alpha: &a)
+        return r > 0.85 && g < 0.25 && b < 0.25
+    }
+
+    static func isRedStroke(_ stroke: PKStroke) -> Bool {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        stroke.ink.color.getRed(&r, green: &g, blue: &b, alpha: &a)
+        return r > 0.85 && g < 0.25 && b < 0.25
+    }
+
+    // MARK: - Crosshair helper
 
     private func makeCrosshairLayer() -> CALayer {
         let size = Self.crosshairSize

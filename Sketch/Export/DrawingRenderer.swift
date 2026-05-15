@@ -4,13 +4,16 @@ import PencilKit
 enum DrawingRenderer {
     static let margin: CGFloat = 20
     static let scale: CGFloat = 2.0
-    /// Canvas/background color. Same for live canvas and exported PNG so
+    /// JPEG compression quality. 0.9 is visually lossless for sketches and
+    /// keeps file sizes small.
+    static let jpegQuality: CGFloat = 0.9
+    /// Canvas/background color. Same for live canvas and exported image so
     /// what you see matches what you save. Lives in Theme so the whole app stays in sync.
     static var canvasBackground: UIColor { Theme.canvasBackgroundUI }
 
     enum RenderError: Error {
         case emptyDrawing
-        case pngEncodingFailed
+        case encodingFailed
     }
 
     /// Returns true if the drawing has no visible content.
@@ -19,7 +22,7 @@ enum DrawingRenderer {
         return bounds.isNull || bounds.isEmpty || bounds.size == .zero
     }
 
-    /// Render the drawing into a UIImage with a white background and a fixed margin.
+    /// Render the drawing into a UIImage with the canvas background color and a fixed margin.
     static func render(drawing: PKDrawing) throws -> UIImage {
         guard !isEmpty(drawing) else { throw RenderError.emptyDrawing }
 
@@ -39,11 +42,11 @@ enum DrawingRenderer {
         }
     }
 
-    /// Convenience: render and return PNG data.
-    static func renderPNG(drawing: PKDrawing) throws -> Data {
+    /// Render and return JPEG data.
+    static func renderJPEG(drawing: PKDrawing) throws -> Data {
         let image = try render(drawing: drawing)
-        guard let data = image.pngData() else {
-            throw RenderError.pngEncodingFailed
+        guard let data = image.jpegData(compressionQuality: jpegQuality) else {
+            throw RenderError.encodingFailed
         }
         return data
     }

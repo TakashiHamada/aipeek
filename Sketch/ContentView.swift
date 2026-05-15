@@ -49,6 +49,10 @@ struct ContentView: View {
                     controller.selectPen()
                 }
                 .keyboardShortcut("p", modifiers: [])
+                toggleToolButton(systemImage: "highlighter", help: "Red marker (R)", isActive: controller.activeTool == .redPen) {
+                    controller.selectRedPen()
+                }
+                .keyboardShortcut("r", modifiers: [])
                 toggleToolButton(systemImage: "eraser", help: "Eraser (E)", isActive: controller.activeTool == .eraser) {
                     controller.selectEraser()
                 }

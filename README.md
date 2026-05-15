@@ -45,7 +45,7 @@ xcodebuild -project Sketch.xcodeproj -scheme Sketch -configuration Release \
 ├── config.json
 └── sessions/
     └── YYYY-MM-DD/
-        └── sketch_HH-MM-SS.png
+        └── sketch_HH-MM-SS.jpg
 ```
 
 ## 設定 (`config.json`)

@@ -89,7 +89,7 @@ struct PreferencesView: View {
                         }
                         .help("Reset to default save location")
                     }
-                    Text("Folder for PNG files. `~` = home.")
+                    Text("Folder for JPEG files. `~` = home.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }

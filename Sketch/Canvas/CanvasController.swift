@@ -6,6 +6,7 @@ import os
 
 enum ActiveTool {
     case pen
+    case redPen
     case eraser
 }
 
@@ -90,14 +91,14 @@ final class CanvasController: ObservableObject {
         let drawing = canvas.drawing
         guard !DrawingRenderer.isEmpty(drawing) else { return }
         do {
-            let png = try DrawingRenderer.renderPNG(drawing: drawing)
-            try FileStore.write(png, to: url)
+            let jpeg = try DrawingRenderer.renderJPEG(drawing: drawing)
+            try FileStore.write(jpeg, to: url)
             // Clipboard policy:
             //   autoCopyOnSave ON  → send image + path (drop-in for the old Copy! button)
             //   autoCopyOnSave OFF → send path only (keeps Claude Code refresh working
             //                       without overwriting whatever image is on the clipboard)
             if settings?.autoCopyOnSave == true {
-                ClipboardWriter.write(png: png, path: url.path)
+                ClipboardWriter.write(jpeg: jpeg, path: url.path)
                 showToast(.success("Copied: \(url.lastPathComponent)"))
             } else {
                 ClipboardWriter.writePath(url.path)
@@ -112,7 +113,7 @@ final class CanvasController: ObservableObject {
     // MARK: - User actions
 
     /// "New" button. Clears the canvas. In auto-save mode also reserves a new
-    /// filename so subsequent strokes write to a fresh PNG (the previous file
+    /// filename so subsequent strokes write to a fresh JPEG (the previous file
     /// is left in place — sessions accumulate).
     func newSession() {
         guard let canvas else { return }
@@ -137,7 +138,7 @@ final class CanvasController: ObservableObject {
         }
     }
 
-    /// Manual Copy! action. Sends the current drawing to the clipboard (PNG + path),
+    /// Manual Copy! action. Sends the current drawing to the clipboard (JPEG + path),
     /// writing a file if needed. Used by the Copy! button that appears when either
     /// autoSave or autoCopyOnSave is off.
     func copyToClipboard() {
@@ -148,9 +149,9 @@ final class CanvasController: ObservableObject {
             return
         }
 
-        let png: Data
+        let jpeg: Data
         do {
-            png = try DrawingRenderer.renderPNG(drawing: drawing)
+            jpeg = try DrawingRenderer.renderJPEG(drawing: drawing)
         } catch {
             log.error("render failed: \(String(describing: error), privacy: .public)")
             showToast(.error("Could not render image"))
@@ -162,7 +163,7 @@ final class CanvasController: ObservableObject {
             // autoSave ON: write to the session-stable reserved URL.
             if let url = reservedURL {
                 do {
-                    try FileStore.write(png, to: url)
+                    try FileStore.write(jpeg, to: url)
                     savedURL = url
                 } catch {
                     log.error("save (Copy, autoSave) failed: \(String(describing: error), privacy: .public)")
@@ -171,13 +172,13 @@ final class CanvasController: ObservableObject {
         } else {
             // autoSave OFF: every Copy! creates a brand-new file.
             do {
-                savedURL = try FileStore.save(png, at: Date())
+                savedURL = try FileStore.save(jpeg, at: Date())
             } catch {
                 log.error("save (Copy, manual) failed: \(String(describing: error), privacy: .public)")
             }
         }
 
-        ClipboardWriter.write(png: png, path: savedURL?.path)
+        ClipboardWriter.write(jpeg: jpeg, path: savedURL?.path)
 
         if let savedURL {
             showToast(.success("Copied: \(savedURL.lastPathComponent)"))
@@ -194,6 +195,19 @@ final class CanvasController: ObservableObject {
         logging.desiredTool = newTool
         logging.tool = newTool
         activeTool = .pen
+    }
+
+    func selectRedPen() {
+        guard let logging = canvas as? LoggingCanvasView else { return }
+        // Fully opaque saturated red. Multiply-with-black behavior is achieved
+        // by reordering strokes in CanvasView.Coordinator: red strokes are
+        // pushed below all non-red strokes so existing black ink appears to
+        // stay on top.
+        let red = UIColor(red: 1.0, green: 0.0, blue: 0.0, alpha: 1.0)
+        let newTool = PKInkingTool(.monoline, color: red, width: 14)
+        logging.desiredTool = newTool
+        logging.tool = newTool
+        activeTool = .redPen
     }
 
     func selectEraser() {

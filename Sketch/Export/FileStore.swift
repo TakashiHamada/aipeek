@@ -65,10 +65,10 @@ enum FileStore {
         let folderURL = sessionsRoot.appendingPathComponent(dateFolderName, isDirectory: true)
         try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
 
-        var fileURL = folderURL.appendingPathComponent("sketch_\(timeStamp).png")
+        var fileURL = folderURL.appendingPathComponent("sketch_\(timeStamp).jpg")
         var counter = 2
         while FileManager.default.fileExists(atPath: fileURL.path) {
-            fileURL = folderURL.appendingPathComponent("sketch_\(timeStamp)_\(counter).png")
+            fileURL = folderURL.appendingPathComponent("sketch_\(timeStamp)_\(counter).jpg")
             counter += 1
             if counter > 99 { break }
         }

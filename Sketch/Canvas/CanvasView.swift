@@ -61,13 +61,70 @@ struct CanvasView: UIViewRepresentable {
     @MainActor
     final class Coordinator: NSObject, PKCanvasViewDelegate {
         let controller: CanvasController
+        /// Set while we are reassigning .drawing to reorder strokes, so the
+        /// subsequent drawingDidChange notification doesn't recurse.
+        private var isReorderingStrokes = false
 
         init(controller: CanvasController) {
             self.controller = controller
         }
 
         func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
+            if !isReorderingStrokes {
+                pushRedStrokesToBack(in: canvasView)
+            }
             controller.handleDrawingChange()
+        }
+
+        /// Keep all "red marker" strokes at the BOTTOM of the drawing stack
+        /// (i.e. drawn first, behind every other stroke). Effect: drawing a
+        /// red stroke over a black one leaves the black on top — same visual
+        /// outcome as a multiply blend.
+        private func pushRedStrokesToBack(in canvas: PKCanvasView) {
+            let strokes = canvas.drawing.strokes
+            guard strokes.count >= 2 else { return }
+
+            // Only act if at least one red stroke appears AFTER a non-red one.
+            var needsReorder = false
+            var sawNonRed = false
+            for s in strokes {
+                if Self.isRedStroke(s) {
+                    if sawNonRed { needsReorder = true; break }
+                } else {
+                    sawNonRed = true
+                }
+            }
+            guard needsReorder else { return }
+
+            // Stable partition: reds first, others after.
+            var reds: [PKStroke] = []
+            var others: [PKStroke] = []
+            reds.reserveCapacity(strokes.count)
+            others.reserveCapacity(strokes.count)
+            for s in strokes {
+                if Self.isRedStroke(s) {
+                    reds.append(s)
+                } else {
+                    others.append(s)
+                }
+            }
+            var newDrawing = canvas.drawing
+            newDrawing.strokes = reds + others
+
+            // Avoid drawing-policy related rejection that can happen while
+            // shift is held (LoggingCanvasView uses .pencilOnly there).
+            let savedPolicy = canvas.drawingPolicy
+            canvas.drawingPolicy = .anyInput
+            isReorderingStrokes = true
+            canvas.drawing = newDrawing
+            isReorderingStrokes = false
+            canvas.drawingPolicy = savedPolicy
+        }
+
+        private static func isRedStroke(_ stroke: PKStroke) -> Bool {
+            var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+            stroke.ink.color.getRed(&r, green: &g, blue: &b, alpha: &a)
+            return r > 0.85 && g < 0.25 && b < 0.25
         }
     }
 }

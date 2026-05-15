@@ -26,6 +26,7 @@ struct HelpView: View {
                     .font(.headline)
                 VStack(alignment: .leading, spacing: 12) {
                     iconRow(systemImage: "pencil.tip", label: "Pen", shortcut: "P")
+                    iconRow(systemImage: "highlighter", label: "Red marker", shortcut: "R")
                     iconRow(systemImage: "eraser", label: "Eraser", shortcut: "E")
                     iconRow(systemImage: "doc.badge.plus", label: "New", shortcut: "⌘N")
                     iconRow(systemImage: "doc.on.clipboard", label: "Copy", shortcut: "⌘S")

@@ -2,11 +2,11 @@ import UIKit
 import UniformTypeIdentifiers
 
 enum ClipboardWriter {
-    /// Write a single pasteboard item containing both PNG bytes and a UTF-8 path string.
-    /// Apps that accept images receive the PNG; plain-text fields receive the absolute path.
-    static func write(png: Data, path: String?) {
+    /// Write a single pasteboard item containing both JPEG bytes and a UTF-8 path string.
+    /// Apps that accept images receive the JPEG; plain-text fields receive the absolute path.
+    static func write(jpeg: Data, path: String?) {
         var item: [String: Any] = [
-            UTType.png.identifier: png
+            UTType.jpeg.identifier: jpeg
         ]
         if let path, !path.isEmpty {
             item[UTType.utf8PlainText.identifier] = path
