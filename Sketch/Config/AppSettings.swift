@@ -8,6 +8,9 @@ final class AppSettings: ObservableObject {
     @Published var autoSave: Bool {
         didSet { persistIfReady() }
     }
+    @Published var autoCopyOnSave: Bool {
+        didSet { persistIfReady() }
+    }
     @Published var retentionDays: Int {
         didSet { persistIfReady() }
     }
@@ -17,13 +20,14 @@ final class AppSettings: ObservableObject {
     init() {
         let config = AppConfig.load(from: FileStore.configFileURL)
         self.autoSave = config.autoSave
+        self.autoCopyOnSave = config.autoCopyOnSave
         self.retentionDays = config.retentionDays
         self.isInitialized = true
     }
 
     private func persistIfReady() {
         guard isInitialized else { return }
-        AppConfig(autoSave: autoSave, retentionDays: retentionDays)
+        AppConfig(autoSave: autoSave, autoCopyOnSave: autoCopyOnSave, retentionDays: retentionDays)
             .save(to: FileStore.configFileURL)
     }
 }

@@ -90,8 +90,15 @@ final class CanvasController: ObservableObject {
         do {
             let png = try DrawingRenderer.renderPNG(drawing: drawing)
             try FileStore.write(png, to: url)
-            // Keep the path always in the pasteboard so Claude Code can re-read it.
-            ClipboardWriter.writePath(url.path)
+            // Clipboard policy:
+            //   autoCopyOnSave ON  → send image + path (drop-in for the old Copy! button)
+            //   autoCopyOnSave OFF → send path only (keeps Claude Code refresh working
+            //                       without overwriting whatever image is on the clipboard)
+            if settings?.autoCopyOnSave == true {
+                ClipboardWriter.write(png: png, path: url.path)
+            } else {
+                ClipboardWriter.writePath(url.path)
+            }
         } catch {
             log.error("autosave failed: \(String(describing: error), privacy: .public)")
         }
@@ -121,56 +128,6 @@ final class CanvasController: ObservableObject {
         ClipboardWriter.writePath(url.path)
         if announce {
             showToast(.info("パスをクリップボードへ: \(url.lastPathComponent)"))
-        }
-    }
-
-    /// "Copy!" button. Sends the current drawing to the clipboard (PNG + path).
-    /// In auto-save mode, also flushes a write to the reserved URL so the path
-    /// the user is pasting points at an up-to-date file. In manual mode, this
-    /// is the only moment when a file is created.
-    func copyToClipboard() {
-        guard let canvas else { return }
-        let drawing = canvas.drawing
-        guard !DrawingRenderer.isEmpty(drawing) else {
-            showToast(.info("描画がありません"))
-            return
-        }
-
-        let png: Data
-        do {
-            png = try DrawingRenderer.renderPNG(drawing: drawing)
-        } catch {
-            log.error("render failed: \(String(describing: error), privacy: .public)")
-            showToast(.error("画像の生成に失敗しました"))
-            return
-        }
-
-        var savedURL: URL?
-        if settings?.autoSave == true {
-            // Auto-save mode: write to the session-stable reserved URL.
-            if let url = reservedURL {
-                do {
-                    try FileStore.write(png, to: url)
-                    savedURL = url
-                } catch {
-                    log.error("save (autoSave Copy) failed: \(String(describing: error), privacy: .public)")
-                }
-            }
-        } else {
-            // Manual mode: every Copy! creates a brand-new file.
-            do {
-                savedURL = try FileStore.save(png, at: Date())
-            } catch {
-                log.error("save (manual Copy) failed: \(String(describing: error), privacy: .public)")
-            }
-        }
-
-        ClipboardWriter.write(png: png, path: savedURL?.path)
-
-        if let savedURL {
-            showToast(.success("コピーしました: \(savedURL.lastPathComponent)"))
-        } else {
-            showToast(.warning("クリップボードにコピー(保存は失敗)"))
         }
     }
 

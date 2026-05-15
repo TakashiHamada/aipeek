@@ -11,25 +11,6 @@ struct ContentView: View {
             CanvasView(controller: controller)
                 .ignoresSafeArea()
 
-            // Copy! (top-left) — clipboard send
-            Button {
-                controller.copyToClipboard()
-            } label: {
-                Text("Copy!")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(Theme.action, in: Capsule())
-                    .shadow(color: Theme.action.opacity(0.35), radius: 6, x: 0, y: 2)
-            }
-            .buttonStyle(.plain)
-            .keyboardShortcut("s", modifiers: .command)
-            .help("Copy & Save (⌘S)")
-            .padding(.top, 12)
-            .padding(.leading, 16)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-
             // Tools (left edge, vertically centered)
             VStack(spacing: 8) {
                 toggleToolButton(systemImage: "pencil.tip", help: "ペン (P)", isActive: controller.activeTool == .pen) {

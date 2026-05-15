@@ -36,6 +36,21 @@ struct PreferencesView: View {
             Divider()
 
             VStack(alignment: .leading, spacing: 8) {
+                Toggle(isOn: $settings.autoCopyOnSave) {
+                    Text("編集終了時に画像をクリップボードへ自動コピー")
+                        .font(.headline)
+                }
+                .toggleStyle(.switch)
+                .disabled(!settings.autoSave)
+                Text("ストロークを描き終えて 500ms 後に、保存される PNG と保存先パスを同時にクリップボードへ送ります。OFF の場合はパスのみがクリップボードに入ります(他アプリでコピーした画像を上書きしません)。オートセーブ OFF のときは無効です。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 8) {
                 Text("セッション履歴の保持")
                     .font(.headline)
                 Picker("保持日数", selection: $settings.retentionDays) {
@@ -56,6 +71,6 @@ struct PreferencesView: View {
             Spacer(minLength: 0)
         }
         .padding(28)
-        .frame(width: 480, height: 360, alignment: .topLeading)
+        .frame(width: 520, height: 520, alignment: .topLeading)
     }
 }

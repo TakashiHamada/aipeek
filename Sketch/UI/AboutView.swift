@@ -25,7 +25,7 @@ struct AboutView: View {
                     .buttonStyle(.plain)
                 }
 
-                Text("マウスでさっと描いたスケッチを、Claude Code / Claude.ai / Discord などへ素早く共有するための軽量ツールです。オートセーブONの場合、起動時と各保存時に予約パスを自動でクリップボードへコピーするため、Claude Code に一度貼ればその後は「もう一度見て」だけで最新の絵が読まれます。Copy! ボタンは画像本体も含めてクリップボードに送るので、Discord / Claude.ai 等への直接貼り付け用です。")
+                Text("マウスでさっと描いたスケッチを、Claude Code / Claude.ai / Discord などへ素早く共有するための軽量ツールです。オートセーブONの場合、編集が終わる(描き終わって 500ms 後)たびにファイルが自動保存され、画像とパスがクリップボードへ送られます。Claude Code には一度貼ればその後は「もう一度見て」だけで最新の絵が読まれます。画像を直接貼り付けたいアプリ(Discord / Claude.ai 等)へも、描き終えてすぐ ⌘V するだけで共有できます。")
                     .font(.body)
                     .fixedSize(horizontal: false, vertical: true)
 
@@ -37,15 +37,6 @@ struct AboutView: View {
                     iconRow(systemImage: "pencil.tip", label: "ペン(P)")
                     iconRow(systemImage: "eraser", label: "消しゴム(E)")
                     iconRow(systemImage: "doc.badge.plus", label: "新規(⌘N) — キャンバスをクリアして新しいファイル名を予約")
-                    HStack(spacing: 10) {
-                        Text("Copy!")
-                            .font(.system(size: 13, weight: .semibold))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .foregroundStyle(.white)
-                            .background(Theme.action, in: Capsule())
-                        Text("クリップボードへ画像 + パスを送る(⌘S)")
-                    }
                     iconRow(systemImage: "questionmark", label: "このヘルプ")
                     iconRow(systemImage: "gear", label: "環境設定(⌘,)")
                 }

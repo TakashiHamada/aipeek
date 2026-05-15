@@ -2,23 +2,27 @@ import Foundation
 
 struct AppConfig: Codable {
     var autoSave: Bool
+    var autoCopyOnSave: Bool
     var retentionDays: Int
 
-    static let `default` = AppConfig(autoSave: true, retentionDays: 1)
+    static let `default` = AppConfig(autoSave: true, autoCopyOnSave: true, retentionDays: 1)
 
     enum CodingKeys: String, CodingKey {
         case autoSave
+        case autoCopyOnSave
         case retentionDays
     }
 
-    init(autoSave: Bool, retentionDays: Int) {
+    init(autoSave: Bool, autoCopyOnSave: Bool, retentionDays: Int) {
         self.autoSave = autoSave
+        self.autoCopyOnSave = autoCopyOnSave
         self.retentionDays = retentionDays
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.autoSave = (try? container.decodeIfPresent(Bool.self, forKey: .autoSave)) ?? AppConfig.default.autoSave
+        self.autoCopyOnSave = (try? container.decodeIfPresent(Bool.self, forKey: .autoCopyOnSave)) ?? AppConfig.default.autoCopyOnSave
         self.retentionDays = (try? container.decodeIfPresent(Int.self, forKey: .retentionDays)) ?? AppConfig.default.retentionDays
     }
 
