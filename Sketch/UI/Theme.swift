@@ -5,8 +5,8 @@ import UIKit
 /// (warm parchment background, terracotta highlights, mustard actions).
 enum Theme {
     // MARK: - Canvas
-    /// Warm cream — kinder on the eyes than pure white, matches sketchbook paper.
-    static let canvasBackgroundUI: UIColor = UIColor(red: 0.93, green: 0.90, blue: 0.83, alpha: 1.0)
+    /// Off-white — kinder on the eyes than pure #FFFFFF, but neutral enough not to read as cream.
+    static let canvasBackgroundUI: UIColor = UIColor(red: 0.97, green: 0.96, blue: 0.94, alpha: 1.0)
     static let canvasBackground = Color(canvasBackgroundUI)
 
     // MARK: - Tool buttons (Pen / Eraser)

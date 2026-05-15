@@ -11,7 +11,7 @@ struct HelpView: View {
 
             VStack(alignment: .leading, spacing: 18) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text("ヘルプ")
+                    Text("Help")
                         .font(.title2.bold())
                     Spacer()
                     Button(action: onClose) {
@@ -22,26 +22,27 @@ struct HelpView: View {
                     .buttonStyle(.plain)
                 }
 
-                Text("ツール")
+                Text("Tools")
                     .font(.headline)
-                VStack(alignment: .leading, spacing: 10) {
-                    iconRow(systemImage: "pencil.tip", label: "ペン", shortcut: "P")
-                    iconRow(systemImage: "eraser", label: "消しゴム", shortcut: "E")
-                    iconRow(systemImage: "doc.badge.plus", label: "新規", shortcut: "⌘N")
-                    iconRow(systemImage: "questionmark", label: "このヘルプ", shortcut: nil)
-                    iconRow(systemImage: "gear", label: "環境設定", shortcut: "⌘,")
+                VStack(alignment: .leading, spacing: 12) {
+                    iconRow(systemImage: "pencil.tip", label: "Pen", shortcut: "P")
+                    iconRow(systemImage: "eraser", label: "Eraser", shortcut: "E")
+                    iconRow(systemImage: "doc.badge.plus", label: "New", shortcut: "⌘N")
+                    iconRow(systemImage: "doc.on.clipboard", label: "Copy", shortcut: "⌘S")
+                    iconRow(systemImage: "questionmark", label: "Help", shortcut: "H")
+                    iconRow(systemImage: "gear", label: "Preferences", shortcut: "⌘,")
                 }
-                .font(.callout)
+                .font(.body)
 
                 Divider()
 
-                Text("その他のショートカット")
+                Text("Other shortcuts")
                     .font(.headline)
-                VStack(alignment: .leading, spacing: 8) {
-                    shortcutRow(label: "取り消す", keys: "⌘Z")
-                    shortcutRow(label: "やり直す", keys: "⌘⇧Z")
+                VStack(alignment: .leading, spacing: 10) {
+                    shortcutRow(label: "Undo", keys: "⌘Z")
+                    shortcutRow(label: "Redo", keys: "⌘⇧Z")
                 }
-                .font(.callout)
+                .font(.body)
             }
             .padding(24)
             .frame(maxWidth: 480)
@@ -67,11 +68,11 @@ struct HelpView: View {
             Spacer()
             if let shortcut {
                 Text(shortcut)
-                    .font(.system(.caption, design: .monospaced))
+                    .font(.system(.footnote, design: .monospaced))
                     .foregroundStyle(.secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Color.black.opacity(0.06), in: RoundedRectangle(cornerRadius: 5))
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 4)
+                    .background(Color.black.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
             }
         }
     }

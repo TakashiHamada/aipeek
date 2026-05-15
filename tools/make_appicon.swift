@@ -113,6 +113,62 @@ ctx.fillEllipse(in: CGRect(
     height: innerPupilRadius * 2
 ))
 
+// MARK: - Eyelashes
+// Two espresso lashes per eye, fanning OUTWARD from the upper edge.
+// In this y-up context the top of an eye is at +y (= cy + radius);
+// outer side of each eye is away from the icon center on the x axis.
+ctx.setStrokeColor(fg)
+ctx.setLineCap(.round)
+ctx.setLineJoin(.round)
+ctx.setLineWidth(28)
+
+func drawLashes(eyeCenter: CGPoint, mirror: Bool) {
+    let radius = eyeWidth / 2
+    // Two lashes per eye: one upper-outer, one further-outer. Angles are measured
+    // from +x; top of the circle is at +π/2. For the LEFT eye (mirror=false)
+    // outer = left side, i.e. angles greater than π/2.
+    // For the right eye (mirror=true) we reflect across the vertical axis.
+    let raw: [(angle: CGFloat, length: CGFloat, bend: CGFloat)] = [
+        (angle: .pi / 2 + 0.15, length: 120, bend: -0.05),   // near the top, almost straight up
+        (angle: .pi / 2 + 0.55, length: 135, bend: -0.30),   // middle of the fan, longest
+        (angle: .pi / 2 + 0.95, length: 105, bend: -0.55),   // outermost, curls out
+    ]
+
+    for entry in raw {
+        let baseAngle: CGFloat = mirror ? (.pi - entry.angle) : entry.angle
+        let signedBend = mirror ? -entry.bend : entry.bend
+        let length = entry.length
+
+        let anchor = CGPoint(
+            x: eyeCenter.x + radius * cos(baseAngle),
+            y: eyeCenter.y + radius * sin(baseAngle)
+        )
+        let outDx = cos(baseAngle)
+        let outDy = sin(baseAngle)
+        // Tangent (CCW). In y-up rotating (outDx,outDy) by +90° gives (-outDy,outDx).
+        let tanDx = -outDy
+        let tanDy = outDx
+
+        let tip = CGPoint(
+            x: anchor.x + outDx * length + tanDx * signedBend * length * 0.6,
+            y: anchor.y + outDy * length + tanDy * signedBend * length * 0.6
+        )
+        let ctrl = CGPoint(
+            x: anchor.x + outDx * length * 0.55,
+            y: anchor.y + outDy * length * 0.55
+        )
+
+        let p = CGMutablePath()
+        p.move(to: anchor)
+        p.addQuadCurve(to: tip, control: ctrl)
+        ctx.addPath(p)
+        ctx.strokePath()
+    }
+}
+
+drawLashes(eyeCenter: leftEyeCenter, mirror: false)
+drawLashes(eyeCenter: rightEyeCenter, mirror: true)
+
 // MARK: - Output
 guard let cgImage = ctx.makeImage() else {
     fputs("error: could not make image\n", stderr)

@@ -14,8 +14,9 @@ final class AppSettings: ObservableObject {
     @Published var retentionDays: Int {
         didSet { persistIfReady() }
     }
-    /// User-editable sessions folder location. Empty string is treated as nil.
-    /// Path may contain `~`; resolved via NSString.expandingTildeInPath.
+    /// User-editable sessions folder location. Always populated with a real path
+    /// (the default location when no override is set), so the UI always shows
+    /// where files are actually going.
     @Published var customSessionsRoot: String {
         didSet {
             applyCustomSessionsRoot()
@@ -30,14 +31,26 @@ final class AppSettings: ObservableObject {
         self.autoSave = config.autoSave
         self.autoCopyOnSave = config.autoCopyOnSave
         self.retentionDays = config.retentionDays
-        self.customSessionsRoot = config.customSessionsRoot ?? ""
+        // Show the actual path (default if no override stored) in the field.
+        let stored = config.customSessionsRoot?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let stored, !stored.isEmpty {
+            self.customSessionsRoot = stored
+        } else {
+            self.customSessionsRoot = FileStore.defaultSessionsRoot.path
+        }
         self.isInitialized = true
         applyCustomSessionsRoot()
     }
 
-    /// The active sessions root URL, taking the user's override into account.
-    var resolvedSessionsRoot: URL {
-        FileStore.sessionsRoot
+    /// True when the field matches the default sessions location.
+    var isUsingDefaultSessionsRoot: Bool {
+        let expanded = (customSessionsRoot.trimmingCharacters(in: .whitespacesAndNewlines) as NSString).expandingTildeInPath
+        return expanded == FileStore.defaultSessionsRoot.path
+    }
+
+    /// Reset the field to the default location.
+    func resetSessionsRootToDefault() {
+        customSessionsRoot = FileStore.defaultSessionsRoot.path
     }
 
     /// Push the current customSessionsRoot into FileStore so writes go to the right place.
@@ -45,8 +58,12 @@ final class AppSettings: ObservableObject {
         let trimmed = customSessionsRoot.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
             FileStore.customSessionsRoot = nil
+            return
+        }
+        let expanded = (trimmed as NSString).expandingTildeInPath
+        if expanded == FileStore.defaultSessionsRoot.path {
+            FileStore.customSessionsRoot = nil
         } else {
-            let expanded = (trimmed as NSString).expandingTildeInPath
             FileStore.customSessionsRoot = URL(fileURLWithPath: expanded, isDirectory: true)
         }
     }
@@ -54,11 +71,14 @@ final class AppSettings: ObservableObject {
     private func persistIfReady() {
         guard isInitialized else { return }
         let trimmed = customSessionsRoot.trimmingCharacters(in: .whitespacesAndNewlines)
+        let expanded = (trimmed as NSString).expandingTildeInPath
+        // Don't pollute config.json with the default path — store nil instead.
+        let valueToStore: String? = (trimmed.isEmpty || expanded == FileStore.defaultSessionsRoot.path) ? nil : trimmed
         AppConfig(
             autoSave: autoSave,
             autoCopyOnSave: autoCopyOnSave,
             retentionDays: retentionDays,
-            customSessionsRoot: trimmed.isEmpty ? nil : trimmed
+            customSessionsRoot: valueToStore
         ).save(to: FileStore.configFileURL)
     }
 }

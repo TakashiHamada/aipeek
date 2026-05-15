@@ -4,30 +4,28 @@ struct ToastView: View {
     let message: ToastMessage
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 6) {
             Circle()
                 .fill(accentDotColor)
-                .frame(width: 8, height: 8)
+                .frame(width: 6, height: 6)
             Text(message.text)
-                .font(.callout)
-                .foregroundStyle(.white)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.white.opacity(0.92))
+                .lineLimit(1)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(Theme.toolInactive, in: Capsule())
-        .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 2)
-        .transition(.move(edge: .bottom).combined(with: .opacity))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Theme.toolInactive.opacity(0.88), in: Capsule())
+        .shadow(color: .black.opacity(0.15), radius: 4, x: 0, y: 1)
         .accessibilityLabel(message.text)
     }
 
-    /// A small dot keeps semantic feedback (success/error/etc.) without breaking
-    /// the unified espresso background.
     private var accentDotColor: Color {
         switch message.kind {
-        case .success: return Color(red: 0.55, green: 0.82, blue: 0.50)
+        case .success: return Color(red: 0.42, green: 0.82, blue: 0.40)   // green
         case .info:    return .white.opacity(0.55)
-        case .warning: return Theme.action
-        case .error:   return Color(red: 0.96, green: 0.45, blue: 0.40)
+        case .warning: return Theme.action                                 // mustard
+        case .error:   return Color(red: 0.96, green: 0.25, blue: 0.22)   // saturated red
         }
     }
 }

@@ -1,5 +1,6 @@
 import Foundation
 import PencilKit
+import SwiftUI
 import UIKit
 import os
 
@@ -13,7 +14,7 @@ final class CanvasController: ObservableObject {
     weak var canvas: PKCanvasView?
 
     @Published var isEmpty: Bool = true
-    @Published var toast: ToastMessage?
+    @Published var toasts: [ToastMessage] = []
     @Published var activeTool: ActiveTool = .pen
 
     /// Filename reserved for auto-save in the current session.
@@ -27,9 +28,10 @@ final class CanvasController: ObservableObject {
     /// observe auto-save toggle changes.
     private weak var settings: AppSettings?
 
-    /// 500 ms — long enough to coalesce a full stroke, short enough that the
-    /// file is fresh by the time the user thinks to share it.
-    private static let autoSaveDebounceNs: UInt64 = 500_000_000
+    /// 1 s — long enough to coalesce several strokes into a single save without
+    /// thrashing the clipboard, short enough that the file is fresh by the time
+    /// the user thinks to share it.
+    private static let autoSaveDebounceNs: UInt64 = 1_000_000_000
 
     private let log = Logger(subsystem: "com.giftten.aipeek", category: "controller")
 
@@ -96,11 +98,14 @@ final class CanvasController: ObservableObject {
             //                       without overwriting whatever image is on the clipboard)
             if settings?.autoCopyOnSave == true {
                 ClipboardWriter.write(png: png, path: url.path)
+                showToast(.success("Copied: \(url.lastPathComponent)"))
             } else {
                 ClipboardWriter.writePath(url.path)
+                showToast(.info("Path: \(url.lastPathComponent)"))
             }
         } catch {
             log.error("autosave failed: \(String(describing: error), privacy: .public)")
+            showToast(.error("Save failed"))
         }
     }
 
@@ -127,7 +132,8 @@ final class CanvasController: ObservableObject {
         guard settings?.autoSave == true, let url = reservedURL else { return }
         ClipboardWriter.writePath(url.path)
         if announce {
-            showToast(.info("パスをクリップボードへ: \(url.lastPathComponent)"))
+            // A new clipboard target is now active — green dot, same as a save.
+            showToast(.success("Path copied: \(url.lastPathComponent)"))
         }
     }
 
@@ -138,7 +144,7 @@ final class CanvasController: ObservableObject {
         guard let canvas else { return }
         let drawing = canvas.drawing
         guard !DrawingRenderer.isEmpty(drawing) else {
-            showToast(.info("描画がありません"))
+            showToast(.info("Nothing to copy"))
             return
         }
 
@@ -147,7 +153,7 @@ final class CanvasController: ObservableObject {
             png = try DrawingRenderer.renderPNG(drawing: drawing)
         } catch {
             log.error("render failed: \(String(describing: error), privacy: .public)")
-            showToast(.error("画像の生成に失敗しました"))
+            showToast(.error("Could not render image"))
             return
         }
 
@@ -174,9 +180,9 @@ final class CanvasController: ObservableObject {
         ClipboardWriter.write(png: png, path: savedURL?.path)
 
         if let savedURL {
-            showToast(.success("コピーしました: \(savedURL.lastPathComponent)"))
+            showToast(.success("Copied: \(savedURL.lastPathComponent)"))
         } else {
-            showToast(.warning("クリップボードにコピー(保存は失敗)"))
+            showToast(.warning("Copied to clipboard (file save failed)"))
         }
     }
 
@@ -184,7 +190,7 @@ final class CanvasController: ObservableObject {
 
     func selectPen() {
         guard let logging = canvas as? LoggingCanvasView else { return }
-        let newTool = PKInkingTool(.pen, color: .black, width: 10)
+        let newTool = PKInkingTool(.monoline, color: .black, width: 3)
         logging.desiredTool = newTool
         logging.tool = newTool
         activeTool = .pen
@@ -201,13 +207,15 @@ final class CanvasController: ObservableObject {
     // MARK: - Toast
 
     private func showToast(_ message: ToastMessage) {
-        toast = message
+        withAnimation(.easeOut(duration: 0.18)) {
+            toasts.append(message)
+        }
         Task { [weak self] in
             try? await Task.sleep(nanoseconds: 1_800_000_000)
             await MainActor.run {
                 guard let self else { return }
-                if self.toast?.id == message.id {
-                    self.toast = nil
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    self.toasts.removeAll { $0.id == message.id }
                 }
             }
         }

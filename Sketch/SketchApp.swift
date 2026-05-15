@@ -39,7 +39,7 @@ struct SketchApp: App {
                 }
             }
             CommandGroup(after: .appSettings) {
-                Button("環境設定...") {
+                Button("Preferences…") {
                     NotificationCenter.default.post(name: .showPreferences, object: nil)
                 }
                 .keyboardShortcut(",", modifiers: .command)

@@ -25,11 +25,10 @@ struct AboutView: View {
                     .buttonStyle(.plain)
                 }
 
-                Text("マウスでさっと描いたスケッチを、Claude Code / Claude.ai / Discord などへ素早く共有するための軽量ツールです。")
-                    .font(.body)
-                    .fixedSize(horizontal: false, vertical: true)
+                Text("Be the eyes of your AI.")
+                    .font(.title3.weight(.semibold))
 
-                Text("オートセーブONの場合、編集が終わる(描き終わって 500ms 後)たびにファイルが自動保存され、画像とパスがクリップボードへ送られます。Claude Code には一度貼ればその後は「もう一度見て」だけで最新の絵が読まれます。画像を直接貼り付けたいアプリ(Discord / Claude.ai 等)へも、描き終えてすぐ ⌘V するだけで共有できます。")
+                Text("Sketch what you want to show, and it lands in your AI's hands the moment your pen lifts.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

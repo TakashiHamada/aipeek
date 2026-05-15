@@ -6,30 +6,50 @@ struct ContentView: View {
     @State private var showHelp: Bool = false
     @State private var showAbout: Bool = false
     @State private var showPreferences: Bool = false
+    /// 0 = no wipe, 1 = canvas fully covered. Drives the New-session animation.
+    @State private var wipeProgress: CGFloat = 0
 
     var body: some View {
         ZStack(alignment: .topLeading) {
+            // App-wide background. Filling the safe-area-ignored area with the
+            // canvas color removes the seam between the macOS title bar and the
+            // canvas itself.
+            Theme.canvasBackground
+                .ignoresSafeArea()
+
             CanvasView(controller: controller)
                 .ignoresSafeArea()
 
-            // Copy! button (top-left) — only when auto-copy isn't going to do it for us.
-            if !settings.autoSave || !settings.autoCopyOnSave {
-                iconActionButton(systemImage: "doc.on.clipboard", help: "Copy & Save (⌘S)") {
-                    controller.copyToClipboard()
-                }
-                .keyboardShortcut("s", modifiers: .command)
-                .padding(.top, 12)
-                .padding(.leading, 16)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            // Wipe overlay: a rectangle filled with the canvas color sweeps in
+            // from the left to right, painting over the old sketch.
+            GeometryReader { geo in
+                Theme.canvasBackground
+                    .frame(width: geo.size.width * wipeProgress)
             }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+
+            // Copy button (top-left) — always shown.
+            // Inactive when the canvas is empty, or when auto-save + auto-copy
+            // are both on (clipboard is already being kept in sync automatically).
+            iconActionButton(systemImage: "doc.on.clipboard", help: "Copy (⌘S)") {
+                controller.copyToClipboard()
+            }
+            .keyboardShortcut("s", modifiers: .command)
+            .disabled(copyButtonDisabled)
+            .opacity(copyButtonDisabled ? 0.55 : 1)
+            .animation(.easeInOut(duration: 0.2), value: copyButtonDisabled)
+            .padding(.top, 12)
+            .padding(.leading, 16)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
             // Tools (left edge, vertically centered)
-            VStack(spacing: 8) {
-                toggleToolButton(systemImage: "pencil.tip", help: "ペン (P)", isActive: controller.activeTool == .pen) {
+            VStack(spacing: 18) {
+                toggleToolButton(systemImage: "pencil.tip", help: "Pen (P)", isActive: controller.activeTool == .pen) {
                     controller.selectPen()
                 }
                 .keyboardShortcut("p", modifiers: [])
-                toggleToolButton(systemImage: "eraser", help: "消しゴム (E)", isActive: controller.activeTool == .eraser) {
+                toggleToolButton(systemImage: "eraser", help: "Eraser (E)", isActive: controller.activeTool == .eraser) {
                     controller.selectEraser()
                 }
                 .keyboardShortcut("e", modifiers: [])
@@ -39,45 +59,62 @@ struct ContentView: View {
 
             // Help (?) + New (bottom-left, stacked)
             VStack(spacing: 8) {
-                iconActionButton(systemImage: "questionmark", help: "ヘルプ") {
+                iconActionButton(systemImage: "questionmark", help: "Help (H)") {
                     showHelp = true
                 }
-                iconActionButton(systemImage: "doc.badge.plus", help: "新規 (⌘N)") {
-                    controller.newSession()
+                .keyboardShortcut("h", modifiers: [])
+                iconActionButton(systemImage: "doc.badge.plus", help: "New (⌘N)") {
+                    startNewSession()
                 }
                 .keyboardShortcut("n", modifiers: .command)
+                .disabled(controller.isEmpty)
+                .opacity(controller.isEmpty ? 0.55 : 1)
+                .animation(.easeInOut(duration: 0.2), value: controller.isEmpty)
             }
             .padding(.leading, 16)
             .padding(.bottom, 16)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
 
-            // Toast (bottom-center)
-            if let toast = controller.toast {
-                VStack {
-                    Spacer()
+            // Toast stack (bottom-right, compact). New toasts stack above older
+            // ones; each fades out independently after its lifetime.
+            VStack(alignment: .trailing, spacing: 6) {
+                ForEach(controller.toasts) { toast in
                     ToastView(message: toast)
-                        .padding(.bottom, 24)
-                        .id(toast.id)
+                        .transition(
+                            .asymmetric(
+                                insertion: .opacity.combined(with: .move(edge: .trailing)),
+                                removal: .opacity
+                            )
+                        )
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .allowsHitTesting(false)
-                .animation(.easeInOut(duration: 0.2), value: controller.toast)
             }
+            .padding(.trailing, 16)
+            .padding(.bottom, 16)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+            .allowsHitTesting(false)
 
-            // Help overlay (toolbar reference)
+            // Help overlay
             if showHelp {
                 HelpView { showHelp = false }
                     .transition(.opacity)
             }
 
-            // About overlay (app description + credits — triggered by menu)
+            // About overlay (menu-triggered)
             if showAbout {
                 AboutView { showAbout = false }
+                    .transition(.opacity)
+            }
+
+            // Preferences overlay (menu-triggered, ⌘,)
+            if showPreferences {
+                PreferencesView(onClose: { showPreferences = false })
+                    .environmentObject(settings)
                     .transition(.opacity)
             }
         }
         .animation(.easeInOut(duration: 0.18), value: showHelp)
         .animation(.easeInOut(duration: 0.18), value: showAbout)
+        .animation(.easeInOut(duration: 0.18), value: showPreferences)
         .onAppear {
             TitleBarTuner.makeTransparent()
             controller.attachSettings(settings)
@@ -88,11 +125,32 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .showAbout)) { _ in
             showAbout = true
         }
-        .sheet(isPresented: $showPreferences) {
-            PreferencesView()
-                .environmentObject(settings)
-                .preferredColorScheme(.light)
+    }
+
+    /// New-session animation:
+    ///   1. Wipe overlay sweeps left → right, covering the old sketch.
+    ///   2. Once covered, the canvas content is actually cleared and a new
+    ///      filename is reserved (the user never sees the abrupt clear).
+    ///   3. Overlay slides back out the right side, revealing the fresh canvas.
+    private func startNewSession() {
+        // Phase 1: wipe in
+        withAnimation(.easeInOut(duration: 0.35)) {
+            wipeProgress = 1
         }
+        // Phase 2: at peak coverage, clear the canvas
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.36) {
+            controller.newSession()
+            // Phase 3: wipe back out (slide overlay off to the right by reusing
+            // the same width-driven mechanism: just snap to 0 — the canvas
+            // underneath is now blank so the user perceives a fresh page).
+            withAnimation(.easeInOut(duration: 0.25)) {
+                wipeProgress = 0
+            }
+        }
+    }
+
+    private var copyButtonDisabled: Bool {
+        controller.isEmpty || (settings.autoSave && settings.autoCopyOnSave)
     }
 
     private static let iconButtonSize: CGFloat = 40
