@@ -25,6 +25,7 @@
 		CC000000000000000000CC16 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000000000000000000BB16 /* Theme.swift */; };
 		CC000000000000000000CC17 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000000000000000000BB17 /* AppSettings.swift */; };
 		CC000000000000000000CC18 /* PreferencesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000000000000000000BB18 /* PreferencesView.swift */; };
+		CC000000000000000000CC19 /* HelpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000000000000000000BB19 /* HelpView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -49,6 +50,7 @@
 		BB000000000000000000BB16 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		BB000000000000000000BB17 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		BB000000000000000000BB18 /* PreferencesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesView.swift; sourceTree = "<group>"; };
+		BB000000000000000000BB19 /* HelpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -149,6 +151,7 @@
 				BB000000000000000000BB15 /* AboutView.swift */,
 				BB000000000000000000BB16 /* Theme.swift */,
 				BB000000000000000000BB18 /* PreferencesView.swift */,
+				BB000000000000000000BB19 /* HelpView.swift */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -239,6 +242,7 @@
 				CC000000000000000000CC16 /* Theme.swift in Sources */,
 				CC000000000000000000CC17 /* AppSettings.swift in Sources */,
 				CC000000000000000000CC18 /* PreferencesView.swift in Sources */,
+				CC000000000000000000CC19 /* HelpView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

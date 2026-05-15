@@ -68,9 +68,35 @@ struct PreferencesView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
+            Divider()
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("保存先")
+                    .font(.headline)
+                TextField("", text: $settings.customSessionsRoot, prompt: Text("既定の保存先を使う"))
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(.callout, design: .monospaced))
+                    .autocorrectionDisabled(true)
+                    .textInputAutocapitalization(.never)
+                HStack(spacing: 8) {
+                    Button("既定に戻す") {
+                        settings.customSessionsRoot = ""
+                    }
+                    .disabled(settings.customSessionsRoot.isEmpty)
+                    Spacer()
+                    Text("ファイル名: sketch_HH-MM-SS.png")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+                Text("空欄なら既定 (~/Library/Application Support/com.giftten.aipeek/sessions) を使います。`~` は展開されます。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             Spacer(minLength: 0)
         }
         .padding(28)
-        .frame(width: 520, height: 520, alignment: .topLeading)
+        .frame(width: 560, height: 660, alignment: .topLeading)
     }
 }

@@ -31,7 +31,20 @@ enum FileStore {
         return base.appendingPathComponent(bundleFolderName, isDirectory: true)
     }
 
+    /// User-supplied override for the sessions folder location. When set, all
+    /// reads/writes go here instead of `appSupportRoot/sessions`. config.json
+    /// itself always stays in `appSupportRoot` so the user can find it.
+    nonisolated(unsafe) static var customSessionsRoot: URL?
+
     static var sessionsRoot: URL {
+        if let custom = customSessionsRoot {
+            return custom
+        }
+        return appSupportRoot.appendingPathComponent(sessionsFolderName, isDirectory: true)
+    }
+
+    /// The default sessions root, ignoring any user override.
+    static var defaultSessionsRoot: URL {
         appSupportRoot.appendingPathComponent(sessionsFolderName, isDirectory: true)
     }
 

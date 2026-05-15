@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var controller = CanvasController()
     @EnvironmentObject private var settings: AppSettings
+    @State private var showHelp: Bool = false
     @State private var showAbout: Bool = false
     @State private var showPreferences: Bool = false
 
@@ -10,6 +11,17 @@ struct ContentView: View {
         ZStack(alignment: .topLeading) {
             CanvasView(controller: controller)
                 .ignoresSafeArea()
+
+            // Copy! button (top-left) — only when auto-copy isn't going to do it for us.
+            if !settings.autoSave || !settings.autoCopyOnSave {
+                iconActionButton(systemImage: "doc.on.clipboard", help: "Copy & Save (⌘S)") {
+                    controller.copyToClipboard()
+                }
+                .keyboardShortcut("s", modifiers: .command)
+                .padding(.top, 12)
+                .padding(.leading, 16)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
 
             // Tools (left edge, vertically centered)
             VStack(spacing: 8) {
@@ -27,8 +39,8 @@ struct ContentView: View {
 
             // Help (?) + New (bottom-left, stacked)
             VStack(spacing: 8) {
-                iconActionButton(systemImage: "questionmark", help: "このアプリについて") {
-                    showAbout = true
+                iconActionButton(systemImage: "questionmark", help: "ヘルプ") {
+                    showHelp = true
                 }
                 iconActionButton(systemImage: "doc.badge.plus", help: "新規 (⌘N)") {
                     controller.newSession()
@@ -52,12 +64,19 @@ struct ContentView: View {
                 .animation(.easeInOut(duration: 0.2), value: controller.toast)
             }
 
-            // About overlay
+            // Help overlay (toolbar reference)
+            if showHelp {
+                HelpView { showHelp = false }
+                    .transition(.opacity)
+            }
+
+            // About overlay (app description + credits — triggered by menu)
             if showAbout {
                 AboutView { showAbout = false }
                     .transition(.opacity)
             }
         }
+        .animation(.easeInOut(duration: 0.18), value: showHelp)
         .animation(.easeInOut(duration: 0.18), value: showAbout)
         .onAppear {
             TitleBarTuner.makeTransparent()
@@ -65,6 +84,9 @@ struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .showPreferences)) { _ in
             showPreferences = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .showAbout)) { _ in
+            showAbout = true
         }
         .sheet(isPresented: $showPreferences) {
             PreferencesView()

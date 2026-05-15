@@ -131,6 +131,55 @@ final class CanvasController: ObservableObject {
         }
     }
 
+    /// Manual Copy! action. Sends the current drawing to the clipboard (PNG + path),
+    /// writing a file if needed. Used by the Copy! button that appears when either
+    /// autoSave or autoCopyOnSave is off.
+    func copyToClipboard() {
+        guard let canvas else { return }
+        let drawing = canvas.drawing
+        guard !DrawingRenderer.isEmpty(drawing) else {
+            showToast(.info("描画がありません"))
+            return
+        }
+
+        let png: Data
+        do {
+            png = try DrawingRenderer.renderPNG(drawing: drawing)
+        } catch {
+            log.error("render failed: \(String(describing: error), privacy: .public)")
+            showToast(.error("画像の生成に失敗しました"))
+            return
+        }
+
+        var savedURL: URL?
+        if settings?.autoSave == true {
+            // autoSave ON: write to the session-stable reserved URL.
+            if let url = reservedURL {
+                do {
+                    try FileStore.write(png, to: url)
+                    savedURL = url
+                } catch {
+                    log.error("save (Copy, autoSave) failed: \(String(describing: error), privacy: .public)")
+                }
+            }
+        } else {
+            // autoSave OFF: every Copy! creates a brand-new file.
+            do {
+                savedURL = try FileStore.save(png, at: Date())
+            } catch {
+                log.error("save (Copy, manual) failed: \(String(describing: error), privacy: .public)")
+            }
+        }
+
+        ClipboardWriter.write(png: png, path: savedURL?.path)
+
+        if let savedURL {
+            showToast(.success("コピーしました: \(savedURL.lastPathComponent)"))
+        } else {
+            showToast(.warning("クリップボードにコピー(保存は失敗)"))
+        }
+    }
+
     // MARK: - Tool selection
 
     func selectPen() {

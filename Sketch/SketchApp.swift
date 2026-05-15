@@ -2,6 +2,7 @@ import SwiftUI
 
 extension Notification.Name {
     static let showPreferences = Notification.Name("com.giftten.aipeek.showPreferences")
+    static let showAbout = Notification.Name("com.giftten.aipeek.showAbout")
 }
 
 @main
@@ -29,6 +30,13 @@ struct SketchApp: App {
         .commands {
             CommandGroup(replacing: .newItem) {
                 EmptyView()
+            }
+            // Replace the default "About AIPeek" menu item so it opens our custom panel
+            // with the app description and credits.
+            CommandGroup(replacing: .appInfo) {
+                Button("About AIPeek") {
+                    NotificationCenter.default.post(name: .showAbout, object: nil)
+                }
             }
             CommandGroup(after: .appSettings) {
                 Button("環境設定...") {
