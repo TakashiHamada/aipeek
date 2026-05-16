@@ -8,7 +8,13 @@ struct CanvasView: UIViewRepresentable {
     func makeUIView(context: Context) -> PKCanvasView {
         let canvas = LoggingCanvasView()
         canvas.delegate = context.coordinator
-        canvas.drawingPolicy = .anyInput
+        // .pencilOnly suppresses PencilKit's internal gesture from picking up
+        // mouse touches, which would otherwise render a parallel live freehand
+        // stroke on top of our own previewLayer (visible the moment shift
+        // switches our preview to line-only). Eraser later flips this back to
+        // .anyInput in CanvasController.selectEraser since it delegates to
+        // PencilKit's native gesture via super calls.
+        canvas.drawingPolicy = canvas.restingDrawingPolicy
         // The canvas MUST be opaque. PKInkingTool(.pen) uses a multiply-style
         // blend; on a transparent canvas, black strokes multiply-blend with clear
         // pixels and disappear (colored strokes still show because of hue).
@@ -124,17 +130,15 @@ struct CanvasView: UIViewRepresentable {
             var newDrawing = canvas.drawing
             newDrawing.strokes = reds + others
 
-            // Avoid drawing-policy related rejection that can happen while
-            // shift is held (LoggingCanvasView pins .pencilOnly there).
-            // Restore the policy by consulting the canvas's live shift state
-            // rather than a snapshot — pollShift may have transitioned between
-            // the snapshot and the restore.
+            // Avoid drawing-policy related rejection: inking canvases sit at
+            // .pencilOnly by default (see LoggingCanvasView.restingDrawingPolicy)
+            // and would reject this programmatic edit. Flip to .anyInput for
+            // the assignment, then restore to the tool's resting policy.
             canvas.drawingPolicy = .anyInput
             isReorderingStrokes = true
             canvas.drawing = newDrawing
             isReorderingStrokes = false
-            let shiftActive = (canvas as? LoggingCanvasView)?.isShiftPolicyActive ?? false
-            canvas.drawingPolicy = shiftActive ? .pencilOnly : .anyInput
+            canvas.drawingPolicy = (canvas as? LoggingCanvasView)?.restingDrawingPolicy ?? .anyInput
         }
 
         private static func isRedStroke(_ stroke: PKStroke) -> Bool {

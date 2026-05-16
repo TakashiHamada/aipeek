@@ -75,10 +75,18 @@ final class LoggingCanvasView: PKCanvasView, UIPointerInteractionDelegate {
     /// Live snapshot of the physical shift key, sampled by `pollShift`.
     private var globalShiftDown: Bool = false
 
-    /// Read-only flag exposed to other code paths (e.g. the coordinator's
-    /// reorder logic) so they can restore `drawingPolicy` correctly after a
-    /// temporary `.anyInput` excursion.
-    var isShiftPolicyActive: Bool { globalShiftDown }
+    /// The drawing policy this canvas should sit at while idle. Inking tools
+    /// use `.pencilOnly` so PencilKit's internal gesture never picks up mouse
+    /// touches — that would render a parallel "live" freehand stroke on top
+    /// of our own `previewLayer`, which becomes visible the moment we hide
+    /// the freehand portion of the preview (e.g. when Shift switches the
+    /// preview to a line-only view). Eraser is delegated to PencilKit's
+    /// native gesture, so it needs `.anyInput` to accept mouse input.
+    /// Used by code paths that temporarily flip to `.anyInput` for a
+    /// programmatic `drawing` assignment, to know what to restore to.
+    var restingDrawingPolicy: PKCanvasViewDrawingPolicy {
+        desiredTool is PKEraserTool ? .anyInput : .pencilOnly
+    }
 
     // MARK: - Misc layers
 
@@ -210,11 +218,13 @@ final class LoggingCanvasView: PKCanvasView, UIPointerInteractionDelegate {
         guard isShiftDown != globalShiftDown else { return }
         globalShiftDown = isShiftDown
 
+        // NB: drawingPolicy is intentionally NOT toggled here. It is owned by
+        // the tool selection (see `restingDrawingPolicy`) and must stay
+        // `.pencilOnly` for inking so PencilKit never renders its own live
+        // stroke alongside our `previewLayer`.
         if isShiftDown {
-            drawingPolicy = .pencilOnly
             showCrosshair()
         } else {
-            drawingPolicy = .anyInput
             hideCrosshair()
         }
         pointerInteractionRef?.invalidate()
@@ -328,42 +338,33 @@ final class LoggingCanvasView: PKCanvasView, UIPointerInteractionDelegate {
     /// `CAShapeLayer`. Cheap enough to call on every `touchesMoved` and on
     /// every shift transition (one allocation, no animation).
     ///
-    /// **Preview policy**:
-    ///   - While shift is held, preview shows ONLY the current line segment.
-    ///     Any earlier freehand portion is hidden from preview (it still
-    ///     exists in `dragSegments` and will be part of the committed stroke).
-    ///   - While shift is not held, preview shows the full segment chain
-    ///     (including any earlier line segment that has been closed).
+    /// Always renders the full segment chain — past freehand and closed line
+    /// segments included — because PencilKit's live stroke is suppressed via
+    /// `.pencilOnly`, so this overlay is the sole renderer for the in-progress
+    /// drag. The current segment's end-point is derived live: line → snapped
+    /// cursor, freehand → already accumulated in `seg.points`.
     private func renderPreview() {
         guard let preview = previewLayer, !dragSegments.isEmpty else { return }
         let path = UIBezierPath()
 
-        if globalShiftDown, let last = dragSegments.last, last.mode == .line {
-            // Shift-held preview: just the current line segment.
-            let end = snapped(from: last.anchor, to: cursorLocation)
-            path.move(to: last.anchor)
-            path.addLine(to: end)
-        } else {
-            // Full chain.
-            let first = dragSegments[0]
-            path.move(to: first.anchor)
-            for (i, seg) in dragSegments.enumerated() {
-                let isCurrent = (i == dragSegments.count - 1)
-                switch seg.mode {
-                case .line:
-                    let end: CGPoint
-                    if isCurrent {
-                        end = snapped(from: seg.anchor, to: cursorLocation)
-                    } else if seg.points.count >= 2 {
-                        end = seg.points[1]
-                    } else {
-                        end = seg.anchor
-                    }
-                    path.addLine(to: end)
-                case .freehand:
-                    for p in seg.points.dropFirst() {
-                        path.addLine(to: p)
-                    }
+        let first = dragSegments[0]
+        path.move(to: first.anchor)
+        for (i, seg) in dragSegments.enumerated() {
+            let isCurrent = (i == dragSegments.count - 1)
+            switch seg.mode {
+            case .line:
+                let end: CGPoint
+                if isCurrent {
+                    end = snapped(from: seg.anchor, to: cursorLocation)
+                } else if seg.points.count >= 2 {
+                    end = seg.points[1]
+                } else {
+                    end = seg.anchor
+                }
+                path.addLine(to: end)
+            case .freehand:
+                for p in seg.points.dropFirst() {
+                    path.addLine(to: p)
                 }
             }
         }
@@ -421,14 +422,13 @@ final class LoggingCanvasView: PKCanvasView, UIPointerInteractionDelegate {
         )
 
         // Drop drawingPolicy to .anyInput just for the assignment so PencilKit
-        // doesn't reject a programmatic edit while in .pencilOnly; restore
-        // based on the *current* shift state, not a saved snapshot, because
-        // pollShift may have transitioned between snapshot and restore.
+        // doesn't reject a programmatic edit while in .pencilOnly, then restore
+        // to whatever the current tool wants at rest (inking → .pencilOnly).
         drawingPolicy = .anyInput
         var newDrawing = drawing
         newDrawing.strokes.append(stroke)
         drawing = newDrawing
-        drawingPolicy = globalShiftDown ? .pencilOnly : .anyInput
+        drawingPolicy = restingDrawingPolicy
         setNeedsDisplay()
     }
 

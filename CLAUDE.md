@@ -31,7 +31,7 @@ Sketch/
 - **インキング描画は全て自前 preview + commit on touchesEnded**: `LoggingCanvasView` が `touchesBegan/Moved/Ended` を捕まえて `dragSegments: [Segment]` に蓄積し、CAShapeLayer の単一 path に毎フレーム反映。touchesEnded で `PKStroke` として `drawing.strokes` に append する。PencilKit のネイティブストローク作成パスは inking ツールでは使わない(super を呼ばない)。
 - **複合ストローク**: 1 つのドラッグは複数の `Segment` から成る。`SegmentMode = .freehand | .line` をシフト状態の遷移で切り替える(shift down → 新しい line セグメント、shift up → 新しい freehand セグメント)。コミット時に全 segment を 1 本の PKStroke に flatten する。
 - **eraser だけ PencilKit ネイティブ**: `PKEraserTool` のストローク削除アルゴリズムを再実装するコストは大きいので、消しゴム時のみ `super.touchesBegan/Moved/Ended` に委譲。
-- **`drawingPolicy` の所有権は 1 つ**: `LoggingCanvasView.pollShift` (CADisplayLink 60fps) だけが真の owner。`finalizeDrag` や `Coordinator.pushRedStrokesToBack` は drawing 代入のために一時的に `.anyInput` にするが、復元時は **保存した値ではなく live な `globalShiftDown` を見る**。savedPolicy 方式は競合する。
+- **`drawingPolicy` はツールに紐づく**: インキング時は `.pencilOnly`、消しゴム時は `.anyInput`(`LoggingCanvasView.restingDrawingPolicy`)。インキング時に `.anyInput` にすると PencilKit の内部 gesture がマウスを受け、自前 `previewLayer` と並行で「ライブ自由線」を描画してしまう(Shift 押下中に直線+自由線の二重表示として表面化)。`finalizeDrag` / `Coordinator.pushRedStrokesToBack` は programmatic な `drawing` 代入のために一時的に `.anyInput` にしたあと、必ず `restingDrawingPolicy` で復元する。
 - **Shift キー検出は CGEventSource.flagsState + CADisplayLink polling**: Mac Catalyst では修飾キー単独の押下が `UIPress` を発火しないため。polling が状態変化を検知したら `transitionSegment()` を呼んでドラッグの segment を切り替える。
 - **赤マーカー = z-order トリック**: 赤ストロークは通常の `PKStroke` として保存されるが、`Coordinator.pushRedStrokesToBack` が `drawing.strokes` を「赤を前(=下層)・非赤を後(=上層)」に並べ替える。視覚的に「乗算合成」のように見える。
 - **ドラッグ中の z-order**: コミット後の reorder では足りないので、`LoggingCanvasView` が touchesBegan で非赤ストロークだけを `UIImageView` にレンダリングして canvas の上にオーバーレイ表示する(赤 preview がその下に潜る)。
@@ -56,7 +56,7 @@ Sketch/
 
 - [ ] **インキング系の touches は PencilKit に渡さない**。`LoggingCanvasView.touchesBegan/Moved/Ended` は inking ツール時に super を呼ばず、自前で `dragSegments` を構築する。super を呼ぶのは eraser ツール時のみ
 - [ ] **シフト状態変化は `transitionSegment()` で扱う**。`pollShift` がドラッグ中に shift の遷移を検知したら、現セグメントを「確定形」(line なら snap した端点で固定、freehand なら累積点をそのまま)にして、新セグメントを `cursorLocation` 起点で開始する
-- [ ] `drawingPolicy` を一時的に書き換える場合、復元値は `LoggingCanvasView.isShiftPolicyActive` を見る(savedPolicy ローカル保存方式は禁止)
+- [ ] `drawingPolicy` を一時的に書き換える場合、復元値は `LoggingCanvasView.restingDrawingPolicy` を見る(savedPolicy ローカル保存方式や `globalShiftDown` の参照は禁止 — Shift 状態と policy は無関係になった)
 - [ ] `drawing` プロパティに代入する処理は再帰的に `canvasViewDrawingDidChange` を発火する → 再入ガード必須
 - [ ] PKInkingTool の `.pen` は速度/筆圧で太さ変動する。Catalyst マウス入力 (force=0) では細くなる。`.monoline` を基本に
 - [ ] PKInkingTool の色は ダークモードで自動反転される(.black ↔ .white)。アプリは `preferredColorScheme(.light)` で固定済み
