@@ -85,6 +85,27 @@ final class LoggingCanvasView: PKCanvasView, UIPointerInteractionDelegate {
     /// Live drag preview. Rebuilt every `renderPreview()` from `dragSegments`.
     private var previewLayer: CAShapeLayer?
 
+    /// Empirical factor that reconciles two different rasterisers.
+    /// CAShapeLayer renders a geometric stroke at exactly `lineWidth`, but
+    /// PencilKit's `.monoline` rasteriser renders a `PKStrokePoint(size: W)`
+    /// at roughly W/2 visual width. Multiplying the same factor into both
+    /// `lineWidth` AND `PKStrokePoint.size` keeps preview and committed
+    /// stroke visually identical. Tune empirically if the two ever drift.
+    private static let strokeWidthFactor: CGFloat = 2.0
+
+    /// Extra multiplier applied to the preview layer only. CAShapeLayer's
+    /// geometric stroke comes out ~10% thinner than PencilKit's `.monoline`
+    /// rasterised stroke at the same numeric width, so the preview gets a
+    /// small additional boost to match the committed stroke.
+    private static let previewWidthCompensation: CGFloat = 1.15
+
+    /// Red-marker-only multiplier applied to the committed PKStrokePoint.size.
+    /// PencilKit's `.monoline` rasteriser inflates the red marker more than
+    /// black ink at the same numeric width (likely a colour-dependent
+    /// anti-aliasing artefact), so the committed stroke is scaled down to
+    /// match what the user drew in preview.
+    private static let redCommitWidthScale: CGFloat = 0.65
+
     /// Latest mouse position. Updated by `UIHoverGestureRecognizer` and on
     /// every touchesMoved. Used to position the crosshair and to compute the
     /// live end-point of the in-progress `.line` segment.
@@ -229,11 +250,14 @@ final class LoggingCanvasView: PKCanvasView, UIPointerInteractionDelegate {
         let mode: SegmentMode = globalShiftDown ? .line : .freehand
         dragSegments = [Segment(mode: mode, anchor: start, points: [start])]
 
+        // Order matters: add the preview CAShapeLayer FIRST, then the non-red
+        // overlay as a subview. addSubview lands its backing layer on top of
+        // any previously-added sublayers, so the overlay ends up above the
+        // preview — same z-order trick that `pushRedStrokesToBack` uses post-commit.
+        showPreviewLayer(color: inking.color, width: inking.width)
         if Self.isRedInkingTool(desiredTool) {
             showNonRedStrokesOverlay()
         }
-
-        showPreviewLayer(color: inking.color, width: inking.width)
         renderPreview()
     }
 
@@ -376,7 +400,9 @@ final class LoggingCanvasView: PKCanvasView, UIPointerInteractionDelegate {
         let locations = flattenSegmentsToPoints(segments)
         guard locations.count >= 2 else { return }
 
-        let size = CGSize(width: inking.width, height: inking.width)
+        let isRed = Self.isRedInkingTool(inking)
+        let renderWidth = inking.width * Self.strokeWidthFactor * (isRed ? Self.redCommitWidthScale : 1)
+        let size = CGSize(width: renderWidth, height: renderWidth)
         let ink = PKInk(inking.inkType, color: inking.color)
         let strokePoints = locations.enumerated().map { i, p in
             PKStrokePoint(
@@ -458,10 +484,9 @@ final class LoggingCanvasView: PKCanvasView, UIPointerInteractionDelegate {
         let layer = CAShapeLayer()
         layer.strokeColor = color.cgColor
         layer.fillColor = UIColor.clear.cgColor
-        // Raw tool width: preview and inject use the same value so they look
-        // alike. Any discrepancy between CAShapeLayer and PKStroke rendering
-        // is left as a small visual delta until empirical tuning is needed.
-        layer.lineWidth = width
+        // Same base factor as PKStrokePoint.size in finalizeDrag, plus a small
+        // preview-only compensation — see strokeWidthFactor / previewWidthCompensation.
+        layer.lineWidth = width * Self.strokeWidthFactor * Self.previewWidthCompensation
         layer.lineCap = .round
         layer.lineJoin = .round
         self.layer.addSublayer(layer)
