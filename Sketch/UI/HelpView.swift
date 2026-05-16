@@ -37,13 +37,20 @@ struct HelpView: View {
 
                 Divider()
 
-                Text("Other shortcuts")
+                Text("Drawing")
                     .font(.headline)
                 VStack(alignment: .leading, spacing: 10) {
+                    shortcutRow(label: "Snap to horizontal / vertical line",
+                                keys: "Shift + drag")
                     shortcutRow(label: "Undo", keys: "⌘Z")
                     shortcutRow(label: "Redo", keys: "⌘⇧Z")
                 }
                 .font(.body)
+
+                Text("Hold Shift while dragging to draw a straight horizontal or vertical line. The cursor turns into a crosshair while Shift is held.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .padding(24)
             .frame(maxWidth: 480)

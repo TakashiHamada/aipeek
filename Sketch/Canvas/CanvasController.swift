@@ -22,17 +22,21 @@ final class CanvasController: ObservableObject {
     /// Set on init and on `newSession()` (when auto-save is on).
     private var reservedURL: URL?
 
-    /// Debounced auto-save task (500ms after the last drawing change).
+    /// Debounced auto-save task — fires `autoSaveDebounceNs` after the last
+    /// drawing change.
     private var autoSaveTask: Task<Void, Never>?
 
     /// AppSettings is supplied externally by ContentView's `.task` so we can
     /// observe auto-save toggle changes.
     private weak var settings: AppSettings?
 
-    /// 1 s — long enough to coalesce several strokes into a single save without
-    /// thrashing the clipboard, short enough that the file is fresh by the time
-    /// the user thinks to share it.
+    /// 1 s — long enough to coalesce several strokes into a single save
+    /// without thrashing the clipboard, short enough that the file is fresh
+    /// by the time the user thinks to share it.
     private static let autoSaveDebounceNs: UInt64 = 1_000_000_000
+
+    /// How long a single toast remains visible before fading out.
+    private static let toastLifetimeNs: UInt64 = 1_800_000_000
 
     private let log = Logger(subsystem: "com.giftten.aipeek", category: "controller")
 
@@ -87,17 +91,31 @@ final class CanvasController: ObservableObject {
     }
 
     private func performAutoSave() async {
+        // Snapshot everything we need on the main actor *before* dispatching
+        // the heavy work. PKDrawing is a value type so the snapshot is safe to
+        // hand off to a detached worker, and we capture `url` by value so a
+        // concurrent newSession() that swaps reservedURL can't redirect this
+        // save to the new file.
         guard let canvas, let url = reservedURL else { return }
         let drawing = canvas.drawing
         guard !DrawingRenderer.isEmpty(drawing) else { return }
+        let shouldCopyImage = settings?.autoCopyOnSave == true
+
         do {
-            let jpeg = try DrawingRenderer.renderJPEG(drawing: drawing)
-            try FileStore.write(jpeg, to: url)
+            // Render + disk write are CPU/IO heavy. Run them off the main
+            // actor so a long stroke doesn't visibly stall while a save runs.
+            let jpeg = try await Task.detached(priority: .utility) {
+                let data = try DrawingRenderer.renderJPEG(drawing: drawing)
+                try FileStore.write(data, to: url)
+                return data
+            }.value
+
             // Clipboard policy:
-            //   autoCopyOnSave ON  → send image + path (drop-in for the old Copy! button)
-            //   autoCopyOnSave OFF → send path only (keeps Claude Code refresh working
-            //                       without overwriting whatever image is on the clipboard)
-            if settings?.autoCopyOnSave == true {
+            //   autoCopyOnSave ON  → send image + path
+            //   autoCopyOnSave OFF → send path only (keeps Claude Code refresh
+            //                       working without overwriting an image the
+            //                       user copied from elsewhere)
+            if shouldCopyImage {
                 ClipboardWriter.write(jpeg: jpeg, path: url.path)
                 showToast(.success("Copied: \(url.lastPathComponent)"))
             } else {
@@ -199,12 +217,11 @@ final class CanvasController: ObservableObject {
 
     func selectRedPen() {
         guard let logging = canvas as? LoggingCanvasView else { return }
-        // Fully opaque saturated red. Multiply-with-black behavior is achieved
-        // by reordering strokes in CanvasView.Coordinator: red strokes are
-        // pushed below all non-red strokes so existing black ink appears to
-        // stay on top.
-        let red = UIColor(red: 1.0, green: 0.0, blue: 0.0, alpha: 1.0)
-        let newTool = PKInkingTool(.monoline, color: red, width: 14)
+        // Vermilion (朱色) — see Theme.vermilionRedUI. Multiply-with-black
+        // behaviour is achieved by z-order reordering in CanvasView.Coordinator,
+        // not by blend mode. The exact RGB doubles as the red-stroke identifier
+        // used during reordering, so it must come from Theme.
+        let newTool = PKInkingTool(.monoline, color: Theme.vermilionRedUI, width: 14)
         logging.desiredTool = newTool
         logging.tool = newTool
         activeTool = .redPen
@@ -225,7 +242,7 @@ final class CanvasController: ObservableObject {
             toasts.append(message)
         }
         Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 1_800_000_000)
+            try? await Task.sleep(nanoseconds: Self.toastLifetimeNs)
             await MainActor.run {
                 guard let self else { return }
                 withAnimation(.easeInOut(duration: 0.3)) {

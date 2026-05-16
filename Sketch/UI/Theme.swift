@@ -18,4 +18,11 @@ enum Theme {
     // MARK: - Action buttons (Copy! / ? / Clear)
     /// Mustard amber — warm and distinct from the terracotta active state.
     static let action = Color(red: 0.76, green: 0.53, blue: 0.25)
+
+    // MARK: - Red marker
+    /// Vermilion (朱色). The single source of truth for the "red marker" tool —
+    /// CanvasController uses this when constructing PKInkingTool, and the
+    /// stroke-reorder code compares against this RGB to detect red strokes.
+    /// Don't introduce other reds that would match the same threshold.
+    static let vermilionRedUI = UIColor(red: 0.94, green: 0.30, blue: 0.20, alpha: 1.0)
 }

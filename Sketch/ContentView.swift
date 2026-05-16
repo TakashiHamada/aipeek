@@ -120,9 +120,16 @@ struct ContentView: View {
         .animation(.easeInOut(duration: 0.18), value: showAbout)
         .animation(.easeInOut(duration: 0.18), value: showPreferences)
         .onAppear {
+            // Idempotent: safe to call on every appearance. Hides the macOS
+            // title bar text and pins window resize constraints so the canvas
+            // background extends seamlessly into the title-bar area.
             TitleBarTuner.makeTransparent()
             controller.attachSettings(settings)
         }
+        // The .showPreferences / .showAbout notifications are posted from the
+        // menu-bar `Preferences…` / `About AIPeek` items defined in
+        // `SketchApp.commands { ... }`. See Notification.Name extensions in
+        // SketchApp.swift.
         .onReceive(NotificationCenter.default.publisher(for: .showPreferences)) { _ in
             showPreferences = true
         }

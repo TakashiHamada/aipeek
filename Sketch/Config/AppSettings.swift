@@ -14,9 +14,16 @@ final class AppSettings: ObservableObject {
     @Published var retentionDays: Int {
         didSet { persistIfReady() }
     }
-    /// User-editable sessions folder location. Always populated with a real path
-    /// (the default location when no override is set), so the UI always shows
-    /// where files are actually going.
+    /// User-editable sessions folder location. **Non-optional and always
+    /// populated** — when no override is set we still show the default path so
+    /// the UI's text field is never empty.
+    ///
+    /// On the way out to disk (`persistIfReady`), if the value matches
+    /// `FileStore.defaultSessionsRoot` we store `nil` in `config.json` rather
+    /// than the literal path string. That keeps config.json tidy and lets us
+    /// follow future changes to the default location automatically.
+    /// Compare against `AppConfig.customSessionsRoot: String?` which *is*
+    /// optional — same concept, different layer.
     @Published var customSessionsRoot: String {
         didSet {
             applyCustomSessionsRoot()

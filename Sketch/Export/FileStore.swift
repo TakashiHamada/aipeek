@@ -34,6 +34,10 @@ enum FileStore {
     /// User-supplied override for the sessions folder location. When set, all
     /// reads/writes go here instead of `appSupportRoot/sessions`. config.json
     /// itself always stays in `appSupportRoot` so the user can find it.
+    ///
+    /// Concurrency: written only from @MainActor (`AppSettings`); read from
+    /// any actor through `sessionsRoot`. No lock — last-writer-wins is fine
+    /// because writes are user-driven config edits at human pace.
     nonisolated(unsafe) static var customSessionsRoot: URL?
 
     static var sessionsRoot: URL {
@@ -56,8 +60,11 @@ enum FileStore {
         try FileManager.default.createDirectory(at: appSupportRoot, withIntermediateDirectories: true)
     }
 
-    /// Compute the next available filename for the given date (creating the date folder
-    /// if needed) without writing any data. Used to reserve an auto-save target up front.
+    /// Compute the next available filename for the given date (creating the
+    /// date folder if needed) without writing any data. Used to reserve an
+    /// auto-save target up front.
+    /// If a slot can't be found within 99 attempts, falls back to a millisecond
+    /// suffix so we never silently overwrite an existing file.
     static func reserveFilename(at date: Date) throws -> URL {
         let dateFolderName = dateFormatter.string(from: date)
         let timeStamp = timeFormatter.string(from: date)
@@ -67,15 +74,23 @@ enum FileStore {
 
         var fileURL = folderURL.appendingPathComponent("sketch_\(timeStamp).jpg")
         var counter = 2
-        while FileManager.default.fileExists(atPath: fileURL.path) {
+        while FileManager.default.fileExists(atPath: fileURL.path), counter <= 99 {
             fileURL = folderURL.appendingPathComponent("sketch_\(timeStamp)_\(counter).jpg")
             counter += 1
-            if counter > 99 { break }
+        }
+        if FileManager.default.fileExists(atPath: fileURL.path) {
+            // 99 collisions in the same second is implausible from this app
+            // alone, but could happen if the user dumped files into the folder
+            // externally. Fall back to a millisecond suffix instead of
+            // overwriting.
+            let ms = Int(Date().timeIntervalSince1970 * 1000) % 1000
+            fileURL = folderURL.appendingPathComponent("sketch_\(timeStamp)_ms\(ms).jpg")
         }
         return fileURL
     }
 
-    /// Atomically write PNG data to the given URL. Parent folder is auto-created.
+    /// Atomically write the given bytes to `url` (JPEG in current usage, but
+    /// the function itself is format-agnostic). Parent folder is auto-created.
     static func write(_ data: Data, to url: URL) throws {
         try FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(),
