@@ -23,11 +23,23 @@ enum DrawingRenderer {
     }
 
     /// Render the drawing into a UIImage with the canvas background color and a fixed margin.
+    ///
+    /// `PKDrawing.image(from:scale:)` rasterizes against `UITraitCollection.current`,
+    /// and on macOS when the system is in dark mode PencilKit auto-inverts ink
+    /// colors (`.black` → `.white`). The live canvas is pinned to light via
+    /// `preferredColorScheme(.light)`, but offscreen rasterization doesn't
+    /// inherit that, so the exported JPEG ends up with white strokes on a
+    /// background that's still the off-white canvas color. Wrap the call in
+    /// a light trait collection so the export matches what the user sees.
     static func render(drawing: PKDrawing) throws -> UIImage {
         guard !isEmpty(drawing) else { throw RenderError.emptyDrawing }
 
         let expanded = drawing.bounds.insetBy(dx: -margin, dy: -margin)
-        let drawingImage = drawing.image(from: expanded, scale: scale)
+        var drawingImage = UIImage()
+        let lightTraits = UITraitCollection(userInterfaceStyle: .light)
+        lightTraits.performAsCurrent {
+            drawingImage = drawing.image(from: expanded, scale: scale)
+        }
 
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = scale

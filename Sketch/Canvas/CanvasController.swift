@@ -212,7 +212,6 @@ final class CanvasController: ObservableObject {
         let newTool = PKInkingTool(.monoline, color: .black, width: 3)
         logging.desiredTool = newTool
         logging.tool = newTool
-        logging.drawingPolicy = logging.restingDrawingPolicy
         activeTool = .pen
     }
 
@@ -225,7 +224,6 @@ final class CanvasController: ObservableObject {
         let newTool = PKInkingTool(.monoline, color: Theme.vermilionRedUI, width: 14)
         logging.desiredTool = newTool
         logging.tool = newTool
-        logging.drawingPolicy = logging.restingDrawingPolicy
         activeTool = .redPen
     }
 
@@ -234,9 +232,6 @@ final class CanvasController: ObservableObject {
         let newTool = PKEraserTool(.bitmap, width: 30)
         logging.desiredTool = newTool
         logging.tool = newTool
-        // Eraser is delegated to PencilKit's native gesture (super calls in
-        // touchesBegan/Moved/Ended) so it needs .anyInput to accept mouse.
-        logging.drawingPolicy = logging.restingDrawingPolicy
         activeTool = .eraser
     }
 

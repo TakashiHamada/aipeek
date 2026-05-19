@@ -8,13 +8,7 @@ struct CanvasView: UIViewRepresentable {
     func makeUIView(context: Context) -> PKCanvasView {
         let canvas = LoggingCanvasView()
         canvas.delegate = context.coordinator
-        // .pencilOnly suppresses PencilKit's internal gesture from picking up
-        // mouse touches, which would otherwise render a parallel live freehand
-        // stroke on top of our own previewLayer (visible the moment shift
-        // switches our preview to line-only). Eraser later flips this back to
-        // .anyInput in CanvasController.selectEraser since it delegates to
-        // PencilKit's native gesture via super calls.
-        canvas.drawingPolicy = canvas.restingDrawingPolicy
+        canvas.drawingPolicy = .anyInput
         // The canvas MUST be opaque. PKInkingTool(.pen) uses a multiply-style
         // blend; on a transparent canvas, black strokes multiply-blend with clear
         // pixels and disappear (colored strokes still show because of hue).
@@ -130,15 +124,13 @@ struct CanvasView: UIViewRepresentable {
             var newDrawing = canvas.drawing
             newDrawing.strokes = reds + others
 
-            // Avoid drawing-policy related rejection: inking canvases sit at
-            // .pencilOnly by default (see LoggingCanvasView.restingDrawingPolicy)
-            // and would reject this programmatic edit. Flip to .anyInput for
-            // the assignment, then restore to the tool's resting policy.
+            // Keep .anyInput throughout — that is the canvas's resting policy
+            // since .pencilOnly was found to invalidate PencilKit's render of
+            // previously committed strokes on the next non-pencil touch.
             canvas.drawingPolicy = .anyInput
             isReorderingStrokes = true
             canvas.drawing = newDrawing
             isReorderingStrokes = false
-            canvas.drawingPolicy = (canvas as? LoggingCanvasView)?.restingDrawingPolicy ?? .anyInput
         }
 
         private static func isRedStroke(_ stroke: PKStroke) -> Bool {

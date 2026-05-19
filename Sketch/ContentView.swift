@@ -32,30 +32,37 @@ struct ContentView: View {
             // Copy button (top-left) — always shown.
             // Inactive when the canvas is empty, or when auto-save + auto-copy
             // are both on (clipboard is already being kept in sync automatically).
-            iconActionButton(systemImage: "doc.on.clipboard", help: "Copy (⌘S)") {
+            iconActionButton(systemImage: "doc.on.clipboard") {
                 controller.copyToClipboard()
             }
             .keyboardShortcut("s", modifiers: .command)
             .disabled(copyButtonDisabled)
             .opacity(copyButtonDisabled ? 0.55 : 1)
             .animation(.easeInOut(duration: 0.2), value: copyButtonDisabled)
+            // toolTooltip is applied LAST so the overlay chip stays at full
+            // opacity even when the button is dimmed by `.opacity(0.55)`
+            // (otherwise the chip inherits the parent's faded opacity).
+            .toolTooltip("Copy drawing to clipboard (⌘S)")
             .padding(.top, 12)
             .padding(.leading, 16)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
             // Tools (left edge, vertically centered)
             VStack(spacing: 18) {
-                toggleToolButton(systemImage: "pencil.tip", help: "Pen (P)", isActive: controller.activeTool == .pen) {
+                toggleToolButton(systemImage: "pencil.tip", isActive: controller.activeTool == .pen) {
                     controller.selectPen()
                 }
+                .toolTooltip("Pen — draw in black ink (P)")
                 .keyboardShortcut("p", modifiers: [])
-                toggleToolButton(systemImage: "highlighter", help: "Red marker (R)", isActive: controller.activeTool == .redPen) {
+                toggleToolButton(systemImage: "highlighter", isActive: controller.activeTool == .redPen) {
                     controller.selectRedPen()
                 }
+                .toolTooltip("Red marker — highlight beneath ink (R)")
                 .keyboardShortcut("r", modifiers: [])
-                toggleToolButton(systemImage: "eraser", help: "Eraser (E)", isActive: controller.activeTool == .eraser) {
+                toggleToolButton(systemImage: "eraser", isActive: controller.activeTool == .eraser) {
                     controller.selectEraser()
                 }
+                .toolTooltip("Eraser — remove strokes (E)")
                 .keyboardShortcut("e", modifiers: [])
             }
             .padding(.leading, 16)
@@ -63,17 +70,19 @@ struct ContentView: View {
 
             // Help (?) + New (bottom-left, stacked)
             VStack(spacing: 8) {
-                iconActionButton(systemImage: "questionmark", help: "Help (H)") {
+                iconActionButton(systemImage: "questionmark") {
                     showHelp = true
                 }
+                .toolTooltip("Help & keyboard shortcuts (H)")
                 .keyboardShortcut("h", modifiers: [])
-                iconActionButton(systemImage: "doc.badge.plus", help: "New (⌘N)") {
+                iconActionButton(systemImage: "doc.badge.plus") {
                     startNewSession()
                 }
                 .keyboardShortcut("n", modifiers: .command)
                 .disabled(controller.isEmpty)
                 .opacity(controller.isEmpty ? 0.55 : 1)
                 .animation(.easeInOut(duration: 0.2), value: controller.isEmpty)
+                .toolTooltip("Clear and start a new canvas (⌘N)")
             }
             .padding(.leading, 16)
             .padding(.bottom, 16)
@@ -164,10 +173,10 @@ struct ContentView: View {
         controller.isEmpty || (settings.autoSave && settings.autoCopyOnSave)
     }
 
-    private static let iconButtonSize: CGFloat = 40
+    fileprivate static let iconButtonSize: CGFloat = 40
 
     @ViewBuilder
-    private func iconActionButton(systemImage: String, help: String, action: @escaping () -> Void) -> some View {
+    private func iconActionButton(systemImage: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.system(size: 15, weight: .semibold))
@@ -177,11 +186,10 @@ struct ContentView: View {
                 .shadow(color: Theme.action.opacity(0.35), radius: 6, x: 0, y: 2)
         }
         .buttonStyle(.plain)
-        .help(help)
     }
 
     @ViewBuilder
-    private func toggleToolButton(systemImage: String, help: String, isActive: Bool, action: @escaping () -> Void) -> some View {
+    private func toggleToolButton(systemImage: String, isActive: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.system(size: 15, weight: .semibold))
@@ -197,7 +205,42 @@ struct ContentView: View {
         .shadow(color: isActive ? Theme.toolActive.opacity(0.4) : .clear,
                 radius: isActive ? 6 : 0, x: 0, y: 0)
         .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isActive)
-        .help(help)
+    }
+}
+
+/// Small hover chip rendered to the right of a left-edge toolbar button.
+/// Appears immediately on hover (no system tooltip delay), and is purely
+/// visual — the button stays active and clickable beneath. Accessibility
+/// labels remain on the underlying `Button`'s `Image` (the system reads the
+/// SF Symbol name; `.accessibilityLabel` could be added if needed).
+private struct HoverTooltipChip: ViewModifier {
+    let text: String
+    @State private var isHovering: Bool = false
+
+    func body(content: Content) -> some View {
+        content
+            .onHover { hovering in
+                isHovering = hovering
+            }
+            .overlay(alignment: .leading) {
+                Text(text)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white)
+                    .fixedSize()
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(.black.opacity(0.78), in: RoundedRectangle(cornerRadius: 6))
+                    .offset(x: ContentView.iconButtonSize + 12)
+                    .opacity(isHovering ? 1 : 0)
+                    .animation(.easeInOut(duration: 0.18), value: isHovering)
+                    .allowsHitTesting(false)
+            }
+    }
+}
+
+extension View {
+    fileprivate func toolTooltip(_ text: String) -> some View {
+        modifier(HoverTooltipChip(text: text))
     }
 }
 

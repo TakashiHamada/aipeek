@@ -14,6 +14,15 @@ import CoreGraphics
 /// ends, all segments are converted into a single `PKStroke` and appended
 /// to `drawing`.
 ///
+/// **How PencilKit is bypassed**: `hitTest(_:with:)` returns `self` while an
+/// inking tool is active, so the touch never resolves to a PencilKit
+/// subview (`PKTiledGestureView`, `PKCanvasAttachmentView`, ...). That
+/// blocks both their gesture recognizers AND their UIResponder-based touch
+/// handlers, the latter of which is what `.pencilOnly`-free setups
+/// previously couldn't suppress and what produced the parallel live-stroke
+/// preview during Shift-line. Eraser falls through to `super.hitTest` so
+/// PencilKit's native gesture pipeline can run (see `touchesBegan`).
+///
 /// A drag can contain a mix of `freehand` and `line` segments. The boundary
 /// between segments is whenever the shift key transitions (down ↔ up):
 ///   - shift goes DOWN → close the current freehand segment, start a new
@@ -45,6 +54,8 @@ final class LoggingCanvasView: PKCanvasView, UIPointerInteractionDelegate {
     /// The currently desired tool. Pen/eraser/etc. setters should update this.
     /// `.monoline` keeps stroke width constant; ink color is what
     /// `isRedInkingTool` keys on to enable the red-marker underlay.
+    /// PencilKit suppression for inking touches is handled by the
+    /// `hitTest(_:with:)` override — no per-tool gesture toggling needed.
     var desiredTool: PKTool = PKInkingTool(.monoline, color: .black, width: 3)
 
     // MARK: - Drag state (the new unified model)
@@ -74,19 +85,6 @@ final class LoggingCanvasView: PKCanvasView, UIPointerInteractionDelegate {
     private var displayLink: CADisplayLink?
     /// Live snapshot of the physical shift key, sampled by `pollShift`.
     private var globalShiftDown: Bool = false
-
-    /// The drawing policy this canvas should sit at while idle. Inking tools
-    /// use `.pencilOnly` so PencilKit's internal gesture never picks up mouse
-    /// touches — that would render a parallel "live" freehand stroke on top
-    /// of our own `previewLayer`, which becomes visible the moment we hide
-    /// the freehand portion of the preview (e.g. when Shift switches the
-    /// preview to a line-only view). Eraser is delegated to PencilKit's
-    /// native gesture, so it needs `.anyInput` to accept mouse input.
-    /// Used by code paths that temporarily flip to `.anyInput` for a
-    /// programmatic `drawing` assignment, to know what to restore to.
-    var restingDrawingPolicy: PKCanvasViewDrawingPolicy {
-        desiredTool is PKEraserTool ? .anyInput : .pencilOnly
-    }
 
     // MARK: - Misc layers
 
@@ -144,6 +142,44 @@ final class LoggingCanvasView: PKCanvasView, UIPointerInteractionDelegate {
             cleanupDragState()
             hideCrosshair()
             globalShiftDown = false
+        }
+    }
+
+    // MARK: - PencilKit suppression (inking only)
+
+    /// Claim every inking-tool touch at the canvas level. Returning `self`
+    /// stops hit-testing from descending into PencilKit's private subviews
+    /// (`PKTiledGestureView`, `PKCanvasAttachmentView`, …), which would
+    /// otherwise dispatch the touch to their own UIResponder handlers AND
+    /// gesture recognizers — both of which render a parallel live freehand
+    /// stroke on top of our `previewLayer`. The duplicate is most visible
+    /// during Shift-line, where our snapped line and PencilKit's unsnapped
+    /// freehand show simultaneously. (Disabling `PKDrawingGestureRecognizer`
+    /// alone wasn't enough because the responder route bypasses the gesture
+    /// state machine; `drawingPolicy = .pencilOnly` would suppress both but
+    /// has a separate fatal regression — see CLAUDE.md.)
+    ///
+    /// Eraser falls through to `super.hitTest`: it delegates to PencilKit's
+    /// native gesture pipeline via `super.touchesBegan/Moved/Ended`, so it
+    /// MUST resolve to a deeper subview as normal.
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        if desiredTool is PKInkingTool, self.point(inside: point, with: event) {
+            return self
+        }
+        return super.hitTest(point, with: event)
+    }
+
+    // MARK: - Manual undo
+
+    /// Restore `drawing` to a previous snapshot, registering the inverse so
+    /// UndoManager can redo. Calling this from inside an undo block is the
+    /// canonical pattern — UndoManager routes the nested registration to the
+    /// redo stack automatically because it's in `.undoing` state.
+    private func setDrawingUndoable(_ newDrawing: PKDrawing) {
+        let oldDrawing = drawing
+        drawing = newDrawing
+        undoManager?.registerUndo(withTarget: self) { target in
+            target.setDrawingUndoable(oldDrawing)
         }
     }
 
@@ -218,10 +254,9 @@ final class LoggingCanvasView: PKCanvasView, UIPointerInteractionDelegate {
         guard isShiftDown != globalShiftDown else { return }
         globalShiftDown = isShiftDown
 
-        // NB: drawingPolicy is intentionally NOT toggled here. It is owned by
-        // the tool selection (see `restingDrawingPolicy`) and must stay
-        // `.pencilOnly` for inking so PencilKit never renders its own live
-        // stroke alongside our `previewLayer`.
+        // `drawingPolicy` is pinned to `.anyInput` (see CLAUDE.md); PencilKit
+        // suppression is done via `hitTest`, not policy toggling. We only
+        // need to drive the crosshair + segment transition here.
         if isShiftDown {
             showCrosshair()
         } else {
@@ -340,7 +375,7 @@ final class LoggingCanvasView: PKCanvasView, UIPointerInteractionDelegate {
     ///
     /// Always renders the full segment chain — past freehand and closed line
     /// segments included — because PencilKit's live stroke is suppressed via
-    /// `.pencilOnly`, so this overlay is the sole renderer for the in-progress
+    /// `hitTest` and this overlay is the sole renderer for the in-progress
     /// drag. The current segment's end-point is derived live: line → snapped
     /// cursor, freehand → already accumulated in `seg.points`.
     private func renderPreview() {
@@ -421,14 +456,16 @@ final class LoggingCanvasView: PKCanvasView, UIPointerInteractionDelegate {
             path: PKStrokePath(controlPoints: strokePoints, creationDate: Date())
         )
 
-        // Drop drawingPolicy to .anyInput just for the assignment so PencilKit
-        // doesn't reject a programmatic edit while in .pencilOnly, then restore
-        // to whatever the current tool wants at rest (inking → .pencilOnly).
+        // The canvas sits at .anyInput at rest; we keep it there for the
+        // programmatic commit so PencilKit accepts the drawing assignment.
+        // PencilKit's auto-undo only fires when a stroke is committed via its
+        // own gesture pipeline (which we've disabled), so we route the
+        // commit through `setDrawingUndoable` to register the inverse in a
+        // single undo step.
         drawingPolicy = .anyInput
         var newDrawing = drawing
         newDrawing.strokes.append(stroke)
-        drawing = newDrawing
-        drawingPolicy = restingDrawingPolicy
+        setDrawingUndoable(newDrawing)
         setNeedsDisplay()
     }
 
