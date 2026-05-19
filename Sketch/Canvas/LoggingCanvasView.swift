@@ -663,10 +663,14 @@ final class LoggingCanvasView: PKCanvasView, UIPointerInteractionDelegate {
             && abs(ac.b - bc.b) < tolerance
     }
 
+    /// Hoisted once so callers in hot paths (`enforceDesiredTool`,
+    /// `isVermilionColor` via `pushRedStrokesToBack`) don't re-allocate.
+    private static let sRGBColorSpace: CGColorSpace? = CGColorSpace(name: CGColorSpace.sRGB)
+
     private static func sRGBComponents(
         of color: UIColor
     ) -> (r: CGFloat, g: CGFloat, b: CGFloat)? {
-        guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+        guard let space = sRGBColorSpace,
               let converted = color.cgColor.converted(
                 to: space, intent: .defaultIntent, options: nil
               ),

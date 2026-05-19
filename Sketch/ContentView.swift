@@ -219,16 +219,17 @@ struct ContentView: View {
 /// chip; applying the chip last keeps the overlay at full opacity even when
 /// the button is dimmed (Copy / New buttons are the affected cases).
 ///
-/// **Accessibility trade-off**: this replaces SwiftUI's `.help(...)`, which
-/// surfaced both as the macOS system tooltip *and* was read by VoiceOver.
-/// The chip is purely visual. If VoiceOver support is required, attach
-/// `.accessibilityLabel(text)` to the underlying button.
+/// **Accessibility**: the same `text` is also installed as
+/// `.accessibilityLabel`, so VoiceOver speaks the same string callers pass
+/// in. This restores parity with SwiftUI's `.help(...)`, which `toolTooltip`
+/// replaces — callers don't need to remember to add it separately.
 private struct HoverTooltipChip: ViewModifier {
     let text: String
     @State private var isHovering: Bool = false
 
     func body(content: Content) -> some View {
         content
+            .accessibilityLabel(Text(text))
             .onHover { hovering in
                 isHovering = hovering
             }
