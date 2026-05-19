@@ -6,6 +6,10 @@ import CoreGraphics
 /// `PKCanvasView` subclass that owns the drawing model for AIPeek's inking
 /// tools (pen, red marker). Eraser is left to PencilKit's native handling.
 ///
+/// > Historical note — the class name "Logging" comes from an early
+/// > debugging session and the class never logged anything. Renaming would
+/// > touch many files; see refactor TODO in CLAUDE.md.
+///
 /// **Single drawing model: drag = preview, touchesEnded = commit**
 ///
 /// While the user is dragging with an inking tool, PencilKit is bypassed
@@ -14,13 +18,22 @@ import CoreGraphics
 /// ends, all segments are converted into a single `PKStroke` and appended
 /// to `drawing`.
 ///
+/// **How PencilKit is bypassed**: `hitTest(_:with:)` returns `self` while an
+/// inking tool is active, so the touch never resolves to a PencilKit
+/// subview (`PKTiledGestureView`, `PKCanvasAttachmentView`, ...). That
+/// blocks both their gesture recognizers AND their UIResponder-based touch
+/// handlers — the latter is what setups not using `.pencilOnly` previously
+/// couldn't suppress, and what produced the parallel live-stroke preview
+/// during Shift-line. Eraser falls through to `super.hitTest` so PencilKit's
+/// native gesture pipeline can run (see `touchesBegan`).
+///
 /// A drag can contain a mix of `freehand` and `line` segments. The boundary
 /// between segments is whenever the shift key transitions (down ↔ up):
 ///   - shift goes DOWN → close the current freehand segment, start a new
 ///     `line` segment anchored at the current cursor position.
 ///   - shift goes UP   → close the current line segment (snapped end-point
 ///     becomes fixed), start a new `freehand` segment anchored at the
-///     current cursor position.
+///     **snapped end-point** (so the join is exact; see `transitionSegment`).
 ///
 /// The shift state is polled at 60fps via `CADisplayLink` (the only reliable
 /// way to observe modifier-only key presses on Mac Catalyst — see `pollShift`).
@@ -34,10 +47,6 @@ import CoreGraphics
 ///     a `UIImageView` placed *above* the canvas, so the in-progress red
 ///     preview ends up visually beneath them. Mirrors the post-commit z-order
 ///     reordering done by `CanvasView.Coordinator.pushRedStrokesToBack`.
-///
-/// The class name "Logging" is a historical artefact from an early debugging
-/// session — the class never logged anything. Renaming would touch a lot of
-/// files; see refactor TODO in CLAUDE.md.
 final class LoggingCanvasView: PKCanvasView, UIPointerInteractionDelegate {
 
     // MARK: - Tool
@@ -45,6 +54,8 @@ final class LoggingCanvasView: PKCanvasView, UIPointerInteractionDelegate {
     /// The currently desired tool. Pen/eraser/etc. setters should update this.
     /// `.monoline` keeps stroke width constant; ink color is what
     /// `isRedInkingTool` keys on to enable the red-marker underlay.
+    /// PencilKit suppression for inking touches is handled by the
+    /// `hitTest(_:with:)` override — no per-tool gesture toggling needed.
     var desiredTool: PKTool = PKInkingTool(.monoline, color: .black, width: 3)
 
     // MARK: - Drag state (the new unified model)
@@ -75,15 +86,46 @@ final class LoggingCanvasView: PKCanvasView, UIPointerInteractionDelegate {
     /// Live snapshot of the physical shift key, sampled by `pollShift`.
     private var globalShiftDown: Bool = false
 
-    /// Read-only flag exposed to other code paths (e.g. the coordinator's
-    /// reorder logic) so they can restore `drawingPolicy` correctly after a
-    /// temporary `.anyInput` excursion.
-    var isShiftPolicyActive: Bool { globalShiftDown }
-
     // MARK: - Misc layers
 
     /// Live drag preview. Rebuilt every `renderPreview()` from `dragSegments`.
     private var previewLayer: CAShapeLayer?
+
+    /// Width calibration for the live preview (CAShapeLayer) and the
+    /// committed PKStroke. Three empirically-tuned multipliers reconcile two
+    /// rendering paths so what the user sees during the drag matches the
+    /// final stroke; they're collected here so the relationship stays
+    /// auditable. Use `preview(rawWidth:)` and `commit(rawWidth:isRed:)` —
+    /// callers should never multiply individual constants by hand.
+    private enum WidthCalibration {
+        /// Base factor applied to BOTH paths. PencilKit's `.monoline`
+        /// rasteriser renders a `PKStrokePoint(size: W)` at roughly W/2
+        /// visual width, so doubling brings rendered thickness back up to
+        /// the user-facing "N pt" expectation.
+        static let base: CGFloat = 2.0
+
+        /// Extra multiplier on the preview only. CAShapeLayer's geometric
+        /// stroke comes out ~10% thinner than `.monoline` at the same
+        /// numeric width.
+        static let previewBoost: CGFloat = 1.15
+
+        /// Multiplier applied to the *committed* red marker only. The
+        /// vermilion red rasterises ~35% bolder than black at the same
+        /// numeric width (colour-dependent anti-aliasing). Calibrated at
+        /// @2x against the default pen (3pt) and red marker (14pt) — revisit
+        /// if base widths or PencilKit's rasteriser change.
+        static let redCommitScale: CGFloat = 0.65
+
+        /// Width to feed `CAShapeLayer.lineWidth` for the live preview.
+        static func preview(rawWidth: CGFloat) -> CGFloat {
+            return rawWidth * base * previewBoost
+        }
+
+        /// Width to feed `PKStrokePoint.size` at commit time.
+        static func commit(rawWidth: CGFloat, isRed: Bool) -> CGFloat {
+            return rawWidth * base * (isRed ? redCommitScale : 1)
+        }
+    }
 
     /// Latest mouse position. Updated by `UIHoverGestureRecognizer` and on
     /// every touchesMoved. Used to position the crosshair and to compute the
@@ -115,6 +157,56 @@ final class LoggingCanvasView: PKCanvasView, UIPointerInteractionDelegate {
             cleanupDragState()
             hideCrosshair()
             globalShiftDown = false
+        }
+    }
+
+    // MARK: - PencilKit suppression (inking only)
+
+    /// Claim every inking-tool touch at the canvas level. Returning `self`
+    /// stops hit-testing from descending into PencilKit's private subviews
+    /// (`PKTiledGestureView`, `PKCanvasAttachmentView`, …), which would
+    /// otherwise dispatch the touch to their own UIResponder handlers AND
+    /// gesture recognizers — both of which render a parallel live freehand
+    /// stroke on top of our `previewLayer`. The duplicate is most visible
+    /// during Shift-line, where our snapped line and PencilKit's unsnapped
+    /// freehand show simultaneously. (Disabling `PKDrawingGestureRecognizer`
+    /// alone wasn't enough because the responder route bypasses the gesture
+    /// state machine; `drawingPolicy = .pencilOnly` would suppress both but
+    /// causes existing strokes to disappear on the next non-pencil touch —
+    /// see CLAUDE.md → 重要な設計判断 → `drawingPolicy`.)
+    ///
+    /// **Side effect**: while an inking tool is active, *any subview of this
+    /// canvas — current or future —* won't receive touches. Add new
+    /// interactive elements as siblings of the canvas, not children.
+    ///
+    /// Eraser falls through to `super.hitTest`: it delegates to PencilKit's
+    /// native gesture pipeline via `super.touchesBegan/Moved/Ended`, so it
+    /// MUST resolve to a deeper subview as normal.
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        if desiredTool is PKInkingTool, self.point(inside: point, with: event) {
+            return self
+        }
+        return super.hitTest(point, with: event)
+    }
+
+    // MARK: - Manual undo
+
+    /// Restore `drawing` to a previous snapshot, registering the inverse so
+    /// UndoManager can redo.
+    ///
+    /// **Recursive registration pattern**: calling this same helper from
+    /// inside the registered undo block is the canonical Apple pattern.
+    /// UndoManager runs the block while its `isUndoing` (or `isRedoing`) flag
+    /// is true, and any `registerUndo(...)` call made during that window is
+    /// automatically routed to the redo (or undo) stack rather than the
+    /// current one. The recursion is bounded by user undo/redo invocations
+    /// and does not loop on its own. See Apple's UndoManager guide
+    /// "Performing Undo and Redo".
+    private func setDrawingUndoable(_ newDrawing: PKDrawing) {
+        let oldDrawing = drawing
+        drawing = newDrawing
+        undoManager?.registerUndo(withTarget: self) { target in
+            target.setDrawingUndoable(oldDrawing)
         }
     }
 
@@ -160,7 +252,7 @@ final class LoggingCanvasView: PKCanvasView, UIPointerInteractionDelegate {
         if let want = desiredTool as? PKInkingTool,
            let cur = tool as? PKInkingTool,
            cur.inkType == want.inkType,
-           cur.color == want.color,
+           Self.colorsApproxEqual(cur.color, want.color),
            abs(cur.width - want.width) < 0.5 {
             return
         }
@@ -189,11 +281,12 @@ final class LoggingCanvasView: PKCanvasView, UIPointerInteractionDelegate {
         guard isShiftDown != globalShiftDown else { return }
         globalShiftDown = isShiftDown
 
+        // `drawingPolicy` is pinned to `.anyInput` (see CLAUDE.md); PencilKit
+        // suppression is done via `hitTest`, not policy toggling. We only
+        // need to drive the crosshair + segment transition here.
         if isShiftDown {
-            drawingPolicy = .pencilOnly
             showCrosshair()
         } else {
-            drawingPolicy = .anyInput
             hideCrosshair()
         }
         pointerInteractionRef?.invalidate()
@@ -229,11 +322,17 @@ final class LoggingCanvasView: PKCanvasView, UIPointerInteractionDelegate {
         let mode: SegmentMode = globalShiftDown ? .line : .freehand
         dragSegments = [Segment(mode: mode, anchor: start, points: [start])]
 
+        // Order matters: add the preview CAShapeLayer FIRST as a sublayer,
+        // then the non-red overlay as a SUBVIEW. `addSubview` lands its
+        // backing layer on top of any sublayers added so far, so the overlay
+        // ends up above the preview → an in-progress red preview ends up
+        // visually under the existing non-red strokes (the overlay is a
+        // raster snapshot of them), mirroring the post-commit z-order
+        // maintained by `pushRedStrokesToBack`.
+        showPreviewLayer(color: inking.color, width: inking.width)
         if Self.isRedInkingTool(desiredTool) {
             showNonRedStrokesOverlay()
         }
-
-        showPreviewLayer(color: inking.color, width: inking.width)
         renderPreview()
     }
 
@@ -277,23 +376,31 @@ final class LoggingCanvasView: PKCanvasView, UIPointerInteractionDelegate {
 
     /// Called by `pollShift` when shift goes down or up mid-drag. Closes the
     /// current segment in its "fixed" form, then starts a new segment of the
-    /// opposite mode anchored at the current cursor position.
+    /// opposite mode anchored at the joining point so consecutive segments
+    /// share an endpoint exactly (no floating-point drift at the join — the
+    /// dedup in `flattenSegmentsToPoints` relies on bit-exact equality).
     private func transitionSegment() {
         guard dragInProgress, !dragSegments.isEmpty else { return }
         let cursor = cursorLocation
         let idx = dragSegments.count - 1
 
-        // 1. Close the current segment
+        // 1. Close the current segment and determine where the next one starts.
+        let joinPoint: CGPoint
         if dragSegments[idx].mode == .line {
-            // Pin the line's end-point to the snapped cursor position.
+            // Pin the line's end-point to the snapped cursor position; the
+            // next segment anchors there too so the join is exact.
             let end = snapped(from: dragSegments[idx].anchor, to: cursor)
             dragSegments[idx].points = [dragSegments[idx].anchor, end]
+            joinPoint = end
+        } else {
+            // Freehand needs no closing — its last point IS the cursor
+            // (touchesMoved appends `cursorLocation` on every move).
+            joinPoint = cursor
         }
-        // freehand needs no closing — its points are already accumulated.
 
-        // 2. Start a new segment anchored at the cursor, in the opposite mode.
+        // 2. Start a new segment of the opposite mode, anchored at the join.
         let newMode: SegmentMode = globalShiftDown ? .line : .freehand
-        dragSegments.append(Segment(mode: newMode, anchor: cursor, points: [cursor]))
+        dragSegments.append(Segment(mode: newMode, anchor: joinPoint, points: [joinPoint]))
 
         renderPreview()
     }
@@ -304,42 +411,33 @@ final class LoggingCanvasView: PKCanvasView, UIPointerInteractionDelegate {
     /// `CAShapeLayer`. Cheap enough to call on every `touchesMoved` and on
     /// every shift transition (one allocation, no animation).
     ///
-    /// **Preview policy**:
-    ///   - While shift is held, preview shows ONLY the current line segment.
-    ///     Any earlier freehand portion is hidden from preview (it still
-    ///     exists in `dragSegments` and will be part of the committed stroke).
-    ///   - While shift is not held, preview shows the full segment chain
-    ///     (including any earlier line segment that has been closed).
+    /// Always renders the full segment chain — past freehand and closed line
+    /// segments included — because PencilKit's live stroke is suppressed via
+    /// `hitTest` and this overlay is the sole renderer for the in-progress
+    /// drag. The current segment's end-point is derived live: line → snapped
+    /// cursor, freehand → already accumulated in `seg.points`.
     private func renderPreview() {
         guard let preview = previewLayer, !dragSegments.isEmpty else { return }
         let path = UIBezierPath()
 
-        if globalShiftDown, let last = dragSegments.last, last.mode == .line {
-            // Shift-held preview: just the current line segment.
-            let end = snapped(from: last.anchor, to: cursorLocation)
-            path.move(to: last.anchor)
-            path.addLine(to: end)
-        } else {
-            // Full chain.
-            let first = dragSegments[0]
-            path.move(to: first.anchor)
-            for (i, seg) in dragSegments.enumerated() {
-                let isCurrent = (i == dragSegments.count - 1)
-                switch seg.mode {
-                case .line:
-                    let end: CGPoint
-                    if isCurrent {
-                        end = snapped(from: seg.anchor, to: cursorLocation)
-                    } else if seg.points.count >= 2 {
-                        end = seg.points[1]
-                    } else {
-                        end = seg.anchor
-                    }
-                    path.addLine(to: end)
-                case .freehand:
-                    for p in seg.points.dropFirst() {
-                        path.addLine(to: p)
-                    }
+        let first = dragSegments[0]
+        path.move(to: first.anchor)
+        for (i, seg) in dragSegments.enumerated() {
+            let isCurrent = (i == dragSegments.count - 1)
+            switch seg.mode {
+            case .line:
+                let end: CGPoint
+                if isCurrent {
+                    end = snapped(from: seg.anchor, to: cursorLocation)
+                } else if seg.points.count >= 2 {
+                    end = seg.points[1]
+                } else {
+                    end = seg.anchor
+                }
+                path.addLine(to: end)
+            case .freehand:
+                for p in seg.points.dropFirst() {
+                    path.addLine(to: p)
                 }
             }
         }
@@ -376,7 +474,9 @@ final class LoggingCanvasView: PKCanvasView, UIPointerInteractionDelegate {
         let locations = flattenSegmentsToPoints(segments)
         guard locations.count >= 2 else { return }
 
-        let size = CGSize(width: inking.width, height: inking.width)
+        let isRed = Self.isRedInkingTool(inking)
+        let renderWidth = WidthCalibration.commit(rawWidth: inking.width, isRed: isRed)
+        let size = CGSize(width: renderWidth, height: renderWidth)
         let ink = PKInk(inking.inkType, color: inking.color)
         let strokePoints = locations.enumerated().map { i, p in
             PKStrokePoint(
@@ -394,16 +494,15 @@ final class LoggingCanvasView: PKCanvasView, UIPointerInteractionDelegate {
             path: PKStrokePath(controlPoints: strokePoints, creationDate: Date())
         )
 
-        // Drop drawingPolicy to .anyInput just for the assignment so PencilKit
-        // doesn't reject a programmatic edit while in .pencilOnly; restore
-        // based on the *current* shift state, not a saved snapshot, because
-        // pollShift may have transitioned between snapshot and restore.
-        drawingPolicy = .anyInput
+        // `drawingPolicy` is pinned to `.anyInput` for this canvas (see class
+        // doc); no re-assignment needed here. PencilKit's auto-undo only fires
+        // for gesture-pipeline commits (which we've disabled), so we route
+        // the assignment through `setDrawingUndoable` to register the inverse
+        // in a single undo step. The `drawing` setter triggers PencilKit's
+        // own redraw — no explicit `setNeedsDisplay()` required.
         var newDrawing = drawing
         newDrawing.strokes.append(stroke)
-        drawing = newDrawing
-        drawingPolicy = globalShiftDown ? .pencilOnly : .anyInput
-        setNeedsDisplay()
+        setDrawingUndoable(newDrawing)
     }
 
     /// Convert segment list to a flat point list. Line segments are densified
@@ -418,17 +517,18 @@ final class LoggingCanvasView: PKCanvasView, UIPointerInteractionDelegate {
                 let a = seg.points[0], b = seg.points[1]
                 let len = hypot(b.x - a.x, b.y - a.y)
                 let count = min(64, max(4, Int(len / 8)))
-                // Skip the first point if it duplicates the previous segment's
-                // last point (consecutive segments share an endpoint).
-                let startIndex = (i > 0 && !out.isEmpty && out.last == a) ? 1 : 0
-                for k in startIndex...count {
+                // `transitionSegment` arranges consecutive segments to share
+                // an endpoint exactly; skip our first sample when it would
+                // re-emit the previous segment's tail.
+                let dedupOffset = (i > 0 && !out.isEmpty && out.last == a) ? 1 : 0
+                for k in dedupOffset...count {
                     let t = CGFloat(k) / CGFloat(count)
                     out.append(CGPoint(x: a.x + (b.x - a.x) * t,
                                        y: a.y + (b.y - a.y) * t))
                 }
             case .freehand:
-                let startIndex = (i > 0 && !out.isEmpty && out.last == seg.points.first) ? 1 : 0
-                out.append(contentsOf: seg.points.dropFirst(startIndex))
+                let dedupOffset = (i > 0 && !out.isEmpty && out.last == seg.points.first) ? 1 : 0
+                out.append(contentsOf: seg.points.dropFirst(dedupOffset))
             }
         }
         return out
@@ -458,10 +558,7 @@ final class LoggingCanvasView: PKCanvasView, UIPointerInteractionDelegate {
         let layer = CAShapeLayer()
         layer.strokeColor = color.cgColor
         layer.fillColor = UIColor.clear.cgColor
-        // Raw tool width: preview and inject use the same value so they look
-        // alike. Any discrepancy between CAShapeLayer and PKStroke rendering
-        // is left as a small visual delta until empirical tuning is needed.
-        layer.lineWidth = width
+        layer.lineWidth = WidthCalibration.preview(rawWidth: width)
         layer.lineCap = .round
         layer.lineJoin = .round
         self.layer.addSublayer(layer)
@@ -543,14 +640,43 @@ final class LoggingCanvasView: PKCanvasView, UIPointerInteractionDelegate {
     /// warm UI accents (terracotta r≈0.85, mustard r≈0.76) can never trigger
     /// a false positive — even if they drift across colour-space conversions.
     private static func isVermilionColor(_ color: UIColor) -> Bool {
-        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-        guard color.getRed(&r, green: &g, blue: &b, alpha: &a) else { return false }
-        var tr: CGFloat = 0, tg: CGFloat = 0, tb: CGFloat = 0, ta: CGFloat = 0
-        guard Theme.vermilionRedUI.getRed(&tr, green: &tg, blue: &tb, alpha: &ta) else { return false }
-        let dr = r - tr, dg = g - tg, db = b - tb
-        // Allow ~0.06 per-channel drift to absorb sRGB ↔ extended sRGB / P3
-        // round-trips, but still well clear of any other tone in Theme.
-        return abs(dr) < 0.06 && abs(dg) < 0.06 && abs(db) < 0.06
+        // 0.06 per-channel — wide enough to absorb sRGB ↔ extended sRGB / P3
+        // round-trips, still well clear of any other tone in Theme.
+        return colorsApproxEqual(color, Theme.vermilionRedUI, tolerance: 0.06)
+    }
+
+    /// Per-channel UIColor equality after forcing both inputs to sRGB.
+    /// Direct `UIColor.==` between a `Theme.*` literal and a stroke colour
+    /// PencilKit has round-tripped through its own colour-space pipeline can
+    /// return false even when the colours are visually identical (different
+    /// `colorSpace` on the underlying `CGColor`). Normalising to sRGB before
+    /// component comparison absorbs that drift.
+    private static func colorsApproxEqual(
+        _ a: UIColor,
+        _ b: UIColor,
+        tolerance: CGFloat = 0.04
+    ) -> Bool {
+        guard let ac = sRGBComponents(of: a),
+              let bc = sRGBComponents(of: b) else { return false }
+        return abs(ac.r - bc.r) < tolerance
+            && abs(ac.g - bc.g) < tolerance
+            && abs(ac.b - bc.b) < tolerance
+    }
+
+    /// Hoisted once so callers in hot paths (`enforceDesiredTool`,
+    /// `isVermilionColor` via `pushRedStrokesToBack`) don't re-allocate.
+    private static let sRGBColorSpace: CGColorSpace? = CGColorSpace(name: CGColorSpace.sRGB)
+
+    private static func sRGBComponents(
+        of color: UIColor
+    ) -> (r: CGFloat, g: CGFloat, b: CGFloat)? {
+        guard let space = sRGBColorSpace,
+              let converted = color.cgColor.converted(
+                to: space, intent: .defaultIntent, options: nil
+              ),
+              let comps = converted.components,
+              comps.count >= 3 else { return nil }
+        return (comps[0], comps[1], comps[2])
     }
 
     // MARK: - Crosshair helper

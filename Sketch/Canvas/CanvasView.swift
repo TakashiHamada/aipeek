@@ -124,17 +124,12 @@ struct CanvasView: UIViewRepresentable {
             var newDrawing = canvas.drawing
             newDrawing.strokes = reds + others
 
-            // Avoid drawing-policy related rejection that can happen while
-            // shift is held (LoggingCanvasView pins .pencilOnly there).
-            // Restore the policy by consulting the canvas's live shift state
-            // rather than a snapshot — pollShift may have transitioned between
-            // the snapshot and the restore.
+            // Keep `.anyInput` throughout — see `LoggingCanvasView.hitTest`
+            // doc for the rationale behind pinning `drawingPolicy` here.
             canvas.drawingPolicy = .anyInput
             isReorderingStrokes = true
             canvas.drawing = newDrawing
             isReorderingStrokes = false
-            let shiftActive = (canvas as? LoggingCanvasView)?.isShiftPolicyActive ?? false
-            canvas.drawingPolicy = shiftActive ? .pencilOnly : .anyInput
         }
 
         private static func isRedStroke(_ stroke: PKStroke) -> Bool {
