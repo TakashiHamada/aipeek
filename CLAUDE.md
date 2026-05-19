@@ -58,6 +58,8 @@ Sketch/
 - [ ] **インキング系の touches は PencilKit に渡さない**。`LoggingCanvasView.touchesBegan/Moved/Ended` は inking ツール時に super を呼ばず、自前で `dragSegments` を構築する。super を呼ぶのは eraser ツール時のみ
 - [ ] **シフト状態変化は `transitionSegment()` で扱う**。`pollShift` がドラッグ中に shift の遷移を検知したら、現セグメントを「確定形」(line なら snap した端点で固定、freehand なら累積点をそのまま)にして、新セグメントを `cursorLocation` 起点で開始する
 - [ ] `drawingPolicy` は `.anyInput` で固定。一時的に書き換えても必ず `.anyInput` に戻す。`.pencilOnly` を resting に置くとマウス入力時に既存ストロークが消失するため使用禁止(Shift の有無も無関係)
+- [ ] `LoggingCanvasView.hitTest` は inking 中に `self` を返してサブビューを全て touch から外す副作用がある。新しい interactive 要素を canvas に載せる場合は canvas の **sibling** として配置すること(child では touch を受けない)
+- [ ] ストロークの太さは `LoggingCanvasView.WidthCalibration.preview(rawWidth:)` / `commit(rawWidth:isRed:)` を経由する。3 つの幅係数を呼び出し側で直接掛け算しない(`base` / `previewBoost` / `redCommitScale` の関係が壊れる)
 - [ ] `drawing` プロパティに代入する処理は再帰的に `canvasViewDrawingDidChange` を発火する → 再入ガード必須
 - [ ] PKInkingTool の `.pen` は速度/筆圧で太さ変動する。Catalyst マウス入力 (force=0) では細くなる。`.monoline` を基本に
 - [ ] PKInkingTool の色は ダークモードで自動反転される(.black ↔ .white)。アプリは `preferredColorScheme(.light)` で固定済み

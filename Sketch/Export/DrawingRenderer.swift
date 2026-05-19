@@ -35,6 +35,10 @@ enum DrawingRenderer {
         guard !isEmpty(drawing) else { throw RenderError.emptyDrawing }
 
         let expanded = drawing.bounds.insetBy(dx: -margin, dy: -margin)
+        // Declared as `var` with a placeholder; populated inside the trait
+        // block below. `UITraitCollection.performAsCurrent` returns `Void`
+        // (no value forwarding from the closure), so we capture the result
+        // through the outer variable instead.
         var drawingImage = UIImage()
         let lightTraits = UITraitCollection(userInterfaceStyle: .light)
         lightTraits.performAsCurrent {

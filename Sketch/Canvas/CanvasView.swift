@@ -124,9 +124,8 @@ struct CanvasView: UIViewRepresentable {
             var newDrawing = canvas.drawing
             newDrawing.strokes = reds + others
 
-            // Keep .anyInput throughout — that is the canvas's resting policy
-            // since .pencilOnly was found to invalidate PencilKit's render of
-            // previously committed strokes on the next non-pencil touch.
+            // Keep `.anyInput` throughout — see `LoggingCanvasView.hitTest`
+            // doc for the rationale behind pinning `drawingPolicy` here.
             canvas.drawingPolicy = .anyInput
             isReorderingStrokes = true
             canvas.drawing = newDrawing

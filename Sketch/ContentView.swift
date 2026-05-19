@@ -39,9 +39,6 @@ struct ContentView: View {
             .disabled(copyButtonDisabled)
             .opacity(copyButtonDisabled ? 0.55 : 1)
             .animation(.easeInOut(duration: 0.2), value: copyButtonDisabled)
-            // toolTooltip is applied LAST so the overlay chip stays at full
-            // opacity even when the button is dimmed by `.opacity(0.55)`
-            // (otherwise the chip inherits the parent's faded opacity).
             .toolTooltip("Copy drawing to clipboard (⌘S) — auto-copy options in Preferences (⌘,)")
             .padding(.top, 12)
             .padding(.leading, 16)
@@ -173,6 +170,10 @@ struct ContentView: View {
         controller.isEmpty || (settings.autoSave && settings.autoCopyOnSave)
     }
 
+    /// Diameter of the circular toolbar icons. Exposed at `fileprivate`
+    /// (rather than `private`) so `HoverTooltipChip` can offset its overlay
+    /// to land just to the right of the button — keeping the chip aligned
+    /// with the toolbar without re-measuring the button.
     fileprivate static let iconButtonSize: CGFloat = 40
 
     @ViewBuilder
@@ -210,9 +211,18 @@ struct ContentView: View {
 
 /// Small hover chip rendered to the right of a left-edge toolbar button.
 /// Appears immediately on hover (no system tooltip delay), and is purely
-/// visual — the button stays active and clickable beneath. Accessibility
-/// labels remain on the underlying `Button`'s `Image` (the system reads the
-/// SF Symbol name; `.accessibilityLabel` could be added if needed).
+/// visual — the button stays active and clickable beneath.
+///
+/// **Modifier order**: apply `.toolTooltip(...)` *after* any `.opacity(...)`
+/// on the button. SwiftUI's `.opacity` wraps the entire view chain it sees,
+/// so an `.opacity(0.55)` placed before this modifier would also fade the
+/// chip; applying the chip last keeps the overlay at full opacity even when
+/// the button is dimmed (Copy / New buttons are the affected cases).
+///
+/// **Accessibility trade-off**: this replaces SwiftUI's `.help(...)`, which
+/// surfaced both as the macOS system tooltip *and* was read by VoiceOver.
+/// The chip is purely visual. If VoiceOver support is required, attach
+/// `.accessibilityLabel(text)` to the underlying button.
 private struct HoverTooltipChip: ViewModifier {
     let text: String
     @State private var isHovering: Bool = false
