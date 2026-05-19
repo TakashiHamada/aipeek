@@ -1,6 +1,6 @@
 # AIPeek
 
-> A lightweight macOS sketch app for handing quick mouse-drawn sketches off to AI chat tools — Claude Code, Claude.ai, Discord — in one paste.
+> A lightweight macOS sketch app for handing quick mouse-drawn sketches off to AI chat or messaging tools — Claude Code, Claude.ai, ChatGPT, Discord, Slack, anywhere that takes a pasted image — in one paste.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Platform: macOS 14+](https://img.shields.io/badge/platform-macOS%2014%2B-lightgrey.svg)
@@ -19,19 +19,23 @@ AIPeek collapses that loop:
 
 1. **Open AIPeek** and sketch with the mouse.
 2. The sketch **auto-saves** and is **kept on the clipboard**.
-3. **Paste** into Claude Code, Claude.ai, Discord, or anywhere else.
+3. **Paste** anywhere — Claude Code, Claude.ai, ChatGPT, Discord, Slack, or any other tool that accepts a pasted image.
 4. Keep editing — the clipboard stays current, so *"look again, I updated it"* just works.
 
 Built for Apple Silicon Macs running macOS 14 (Sonoma) or newer. Mac Catalyst + SwiftUI + PencilKit under the hood.
+
+## Status
+
+AIPeek is in **active development** and used daily by the author. The core loop (sketch → auto-save → clipboard) is stable. The storage layout and `config.json` schema may still evolve before a `1.0` tag.
 
 ## Features
 
 - **Auto-save** (default ON) — every drawing is saved under a stable session filename, 1-second debounced. No "did I save?" anxiety.
 - **Auto-clipboard** (default ON) — saved drawings are pushed to the clipboard as a JPEG **+** file-path pair. Paste once into Claude Code; afterwards *"look again"* always reads the latest version.
 - **Shift snap** — hold Shift while dragging to lock the stroke to a horizontal or vertical line. The cursor turns into a crosshair while held.
-- **Red marker** — a separate vermilion ink that renders *under* black strokes (z-order trick), so you can annotate over your sketch without covering the original.
-- **Manual Copy** — one click to push the current canvas to the clipboard, for when auto-copy is off or you want an immediate push.
-- **Light-mode export** — drawings are rasterised in a forced light trait collection, so the exported JPEG is always black-on-cream even when the system is in dark mode.
+- **Red highlighter** — annotate over black ink with vermilion strokes that always sit *behind* your sketch. Corrections never cover the original lines, even when you scribble straight over them.
+- **Copy button** — one click to push the current canvas to the clipboard, for when auto-copy is off or you want an immediate refresh.
+- **Stable look in dark mode** — exports always render black-on-cream, even when macOS is in dark mode, so pasted images look the same in any chat UI.
 - **Undo / Redo** — `⌘Z` / `⌘⇧Z`, with stroke-granularity history.
 
 ## Installation
@@ -40,7 +44,7 @@ Built for Apple Silicon Macs running macOS 14 (Sonoma) or newer. Mac Catalyst + 
 
 1. Download the latest `AIPeek-vX.Y.Z.zip` from the [Releases](https://github.com/TakashiHamada/aipeek/releases) page.
 2. Unzip and drag `AIPeek.app` into `/Applications/` (or `~/Applications/`).
-3. **First launch**: right-click on `AIPeek.app` → **Open** → confirm. The app is signed for local distribution only, not Apple-notarised, so Gatekeeper will warn the first time.
+3. **First launch**: AIPeek is currently unsigned and not Apple-notarised, so Gatekeeper will warn the first time. Right-click on `AIPeek.app` → **Open** → confirm. You only need to do this once.
 
 > [!TIP]
 > If Releases is empty, see the [Build from source](#build-from-source) section below — `xcodebuild` is one command.
@@ -51,7 +55,7 @@ Requirements:
 
 - Xcode 16 or newer
 - macOS 14 (Sonoma) or newer
-- Apple Silicon Mac (also builds for Intel Macs but is only tested on Apple Silicon)
+- Apple Silicon Mac
 
 ```sh
 git clone https://github.com/TakashiHamada/aipeek.git
@@ -86,8 +90,8 @@ Copy that into `/Applications/` (or `~/Applications/`) and launch.
 | **R** | Red marker (vermilion, width 14) |
 | **E** | Eraser |
 | **H** | Help overlay |
-| **⌘N** | New canvas (clears and reserves a new filename when auto-save is on) |
-| **⌘S** | Copy — push image + path to clipboard (disabled while auto-copy is active) |
+| **⌘N** | New canvas (clears the canvas; reserves a fresh filename when auto-save is on) |
+| **⌘S** | Copy canvas to clipboard (image + path; disabled while auto-copy is active) |
 | **⌘,** | Preferences |
 | **⌘Z** / **⌘⇧Z** | Undo / Redo |
 | **Shift + drag** | Constrain stroke to a horizontal or vertical straight line |
@@ -156,6 +160,4 @@ AIPeek is released under the [MIT License](LICENSE).
 
 ## Acknowledgments
 
-- Built on Apple's [PencilKit](https://developer.apple.com/documentation/pencilkit), [SwiftUI](https://developer.apple.com/xcode/swiftui/), and [Mac Catalyst](https://developer.apple.com/mac-catalyst/).
-- Designed with [Claude Code](https://www.anthropic.com/claude-code) and [Claude.ai](https://claude.ai) workflows in mind.
-- Development assisted by Anthropic's Claude.
+Built on Apple's [PencilKit](https://developer.apple.com/documentation/pencilkit), [SwiftUI](https://developer.apple.com/xcode/swiftui/), and [Mac Catalyst](https://developer.apple.com/mac-catalyst/). Inspired by daily use of [Claude Code](https://www.anthropic.com/claude-code) and other AI chat tools.
