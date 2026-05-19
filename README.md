@@ -1,49 +1,102 @@
 # AIPeek
 
-マウスで描いたスケッチを Claude Code / Claude.ai / Discord などにすぐ送り、AI に「ちょっと見て」と頼むための軽量 macOS アプリ。
+> A lightweight macOS sketch app for handing quick mouse-drawn sketches off to AI chat or messaging tools — Claude Code, Claude.ai, ChatGPT, Discord, Slack, anywhere that takes a pasted image — in one paste.
 
-## 概要
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![Platform: macOS 14+](https://img.shields.io/badge/platform-macOS%2014%2B-lightgrey.svg)
+![Stack: Mac Catalyst · SwiftUI · PencilKit](https://img.shields.io/badge/stack-Mac%20Catalyst%20%C2%B7%20SwiftUI%20%C2%B7%20PencilKit-brightgreen.svg)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-- ターゲット: macOS 14 (Sonoma) 以降 / Apple Silicon ネイティブ
-- 構成: Mac Catalyst + SwiftUI + PencilKit
-- Bundle ID: `com.giftten.aipeek`
+<p align="center">
+  <img src="docs/demo.gif" alt="AIPeek demo — sketching and clipboard hand-off" width="720">
+</p>
 
-## 主な機能
+## Why AIPeek
 
-- **オートセーブモード**(デフォルト ON): セッション固定のファイル名で 1 秒デバウンス自動保存
-- **オートクリップボード**(デフォルト ON): 保存と同時に画像 + パスをクリップボードへ送信。Claude Code に一度貼ったら以降「もう一度見て」だけで最新の絵が読まれる
-- **Shift スナップ**: Shift キーを押しながらドラッグで水平/垂直の直線を描画。Shift 押下中はマウスカーソルが十字に変わる
-- **赤マーカー**: 朱色の不透明ペン。黒線の下層にレンダリングされるので「黒線の上に赤を引いても黒のまま」=乗算合成的な見た目
-- **手動 Copy**: クリップボードへ画像+パスを送る(自動コピー OFF 時や、即時更新したい時に)
+Sometimes you just want to show an AI a quick sketch — *"is this UI right?"*, *"look at this layout idea"*, *"the wireframe I have in mind is roughly this"*. The usual path is friction-heavy: open a screenshot tool, draw on a canvas, save, find the file, drag into chat, repeat for every iteration.
 
-## ビルド
+AIPeek collapses that loop:
+
+1. **Open AIPeek** and sketch with the mouse.
+2. The sketch **auto-saves** and is **kept on the clipboard**.
+3. **Paste** anywhere — Claude Code, Claude.ai, ChatGPT, Discord, Slack, or any other tool that accepts a pasted image.
+4. Keep editing — the clipboard stays current, so *"look again, I updated it"* just works.
+
+Built for Apple Silicon Macs running macOS 14 (Sonoma) or newer. Mac Catalyst + SwiftUI + PencilKit under the hood.
+
+## Status
+
+AIPeek is in **active development** and used daily by the author. The core loop (sketch → auto-save → clipboard) is stable. The storage layout and `config.json` schema may still evolve before a `1.0` tag.
+
+## Features
+
+- **Auto-save** (default ON) — every drawing is saved under a stable session filename, 1-second debounced. No "did I save?" anxiety.
+- **Auto-clipboard** (default ON) — saved drawings are pushed to the clipboard as a JPEG **+** file-path pair. Paste once into Claude Code; afterwards *"look again"* always reads the latest version.
+- **Shift snap** — hold Shift while dragging to lock the stroke to a horizontal or vertical line. The cursor turns into a crosshair while held.
+- **Red highlighter** — annotate over black ink with vermilion strokes that always sit *behind* your sketch. Corrections never cover the original lines, even when you scribble straight over them.
+- **Copy button** — one click to push the current canvas to the clipboard, for when auto-copy is off or you want an immediate refresh.
+- **Stable look in dark mode** — exports always render black-on-cream, even when macOS is in dark mode, so pasted images look the same in any chat UI.
+- **Undo / Redo** — `⌘Z` / `⌘⇧Z`, with stroke-granularity history.
+
+## Installation
+
+### Pre-built binary (recommended)
+
+1. Download the latest `AIPeek-vX.Y.Z.zip` from the [Releases](https://github.com/TakashiHamada/aipeek/releases) page.
+2. Unzip and drag `AIPeek.app` into `/Applications/` (or `~/Applications/`).
+3. **First launch**: AIPeek is currently unsigned and not Apple-notarised, so Gatekeeper will warn the first time. Right-click on `AIPeek.app` → **Open** → confirm. You only need to do this once.
+
+> [!TIP]
+> If Releases is empty, see the [Build from source](#build-from-source) section below — `xcodebuild` is one command.
+
+### Build from source
+
+Requirements:
+
+- Xcode 16 or newer
+- macOS 14 (Sonoma) or newer
+- Apple Silicon Mac
 
 ```sh
-xcodebuild -project Sketch.xcodeproj -scheme Sketch -configuration Debug \
-  -destination 'platform=macOS,variant=Mac Catalyst' build
+git clone https://github.com/TakashiHamada/aipeek.git
+cd aipeek
 
-# Release
-xcodebuild -project Sketch.xcodeproj -scheme Sketch -configuration Release \
+xcodebuild -project Sketch.xcodeproj -scheme Sketch \
+  -configuration Release \
   -destination 'platform=macOS,variant=Mac Catalyst' build
 ```
 
-ビルド成果物の `AIPeek.app` を `/Applications/` にコピーすると Spotlight でも検索できる。
+The built `.app` lands under:
 
-## ショートカット
+```
+~/Library/Developer/Xcode/DerivedData/Sketch-*/Build/Products/Release-maccatalyst/AIPeek.app
+```
 
-| キー | 動作 |
-|---|---|
-| **P** | ペン(黒・monoline・幅3) |
-| **R** | 赤マーカー(朱色・幅14) |
-| **E** | 消しゴム |
-| **H** | ヘルプ画面を開く |
-| **⌘N** | 新規(キャンバスをクリア + autoSave ON ならファイル名を再予約) |
-| **⌘S** | Copy(画像 + パスをクリップボードへ。自動コピー時は disable) |
-| **⌘,** | 環境設定 |
-| **⌘Z / ⌘⇧Z** | Undo / Redo |
-| **Shift + ドラッグ** | 水平/垂直の直線を描画 |
+Copy that into `/Applications/` (or `~/Applications/`) and launch.
 
-## 保存先
+## Usage
+
+1. **Launch** AIPeek.
+2. **Sketch** with the mouse — Pen (P), Red Marker (R), or Eraser (E).
+3. The drawing **auto-saves** and lands on the **clipboard**.
+4. **Paste** into Claude Code / Claude.ai / Discord / etc.
+5. Keep editing — the clipboard tracks the latest state.
+
+### Keyboard shortcuts
+
+| Key | Action |
+| --- | --- |
+| **P** | Pen (black monoline, width 3) |
+| **R** | Red marker (vermilion, width 14) |
+| **E** | Eraser |
+| **H** | Help overlay |
+| **⌘N** | New canvas (clears the canvas; reserves a fresh filename when auto-save is on) |
+| **⌘S** | Copy canvas to clipboard (image + path; disabled while auto-copy is active) |
+| **⌘,** | Preferences |
+| **⌘Z** / **⌘⇧Z** | Undo / Redo |
+| **Shift + drag** | Constrain stroke to a horizontal or vertical straight line |
+
+## Storage
 
 ```
 ~/Library/Application Support/com.giftten.aipeek/
@@ -53,9 +106,11 @@ xcodebuild -project Sketch.xcodeproj -scheme Sketch -configuration Release \
         └── sketch_HH-MM-SS.jpg
 ```
 
-JPEG (quality 0.9) で書き出される。
+JPEGs are written at quality `0.9` — visually lossless for line sketches, while keeping file sizes small.
 
-## 設定 (`config.json`)
+## Configuration
+
+`config.json` lives next to the `sessions/` folder. You can edit it by hand, but the easier route is the in-app Preferences window (`⌘,`) — changes apply live and persist immediately.
 
 ```json
 {
@@ -66,18 +121,43 @@ JPEG (quality 0.9) で書き出される。
 }
 ```
 
-| キー | 既定値 | 説明 |
-|---|---|---|
-| `autoSave` | `true` | 描画完了後 1s デバウンスで自動保存 + パス自動コピー |
-| `autoCopyOnSave` | `true` | 自動保存と同時に画像本体もクリップボードへ送信 |
-| `retentionDays` | `1` | 起動時に保持する過去セッションフォルダ数。`-1` = 削除しない / `0` = 全削除 / `N≥1` = 最新 N 日分 |
-| `customSessionsRoot` | `null` | sessions フォルダのカスタム保存先。`null` で既定パス。`~` 展開対応 |
+| Key | Default | Description |
+| --- | --- | --- |
+| `autoSave` | `true` | 1-second debounce after each drag, then save to disk and push the path to the clipboard |
+| `autoCopyOnSave` | `true` | Push the JPEG image itself (not just the path) to the clipboard on each save |
+| `retentionDays` | `1` | At launch, keep this many recent session folders. `-1` = keep all. `0` = delete all. `N ≥ 1` = keep the last *N* days |
+| `customSessionsRoot` | `null` | Override the sessions folder location. `null` = default path. `~` is expanded |
 
-環境設定ウィンドウ(⌘,)から変更すると即座に反映・永続化される。
+## Architecture (brief)
 
-## アーキテクチャ
+```
+Sketch/
+├── SketchApp.swift          # @main + menu commands
+├── ContentView.swift        # ZStack: canvas + toolbar + overlays
+├── Canvas/                  # PencilKit-backed drawing
+│   ├── CanvasView.swift           # UIViewRepresentable + stroke z-order
+│   ├── CanvasController.swift     # @MainActor, auto-save / tool switch
+│   └── LoggingCanvasView.swift    # PKCanvasView subclass; Shift snap, hit-test based PencilKit suppression
+├── Config/                  # Codable AppConfig + ObservableObject AppSettings
+├── Export/                  # PKDrawing → JPEG, file store, clipboard writer
+├── Support/                 # Catalyst title-bar tuning
+└── UI/                      # Help / About / Preferences / Toast / Theme
+```
 
-- `Sketch/Canvas/` — `PKCanvasView` 周辺。`LoggingCanvasView` が Shift スナップ・カーソル・赤マーカー underlay を担当、`CanvasView.Coordinator` がストロークの z-order 並び替えを担当
-- `Sketch/Export/` — `DrawingRenderer` (PKDrawing→JPEG)、`FileStore` (パス管理・書き出し)、`ClipboardWriter`
-- `Sketch/Config/` — `AppConfig` (Codable) と `AppSettings` (ObservableObject)
-- `Sketch/UI/` — Help / About / Preferences / Toast / Theme
+A lot of the canvas behaviour is shaped by non-obvious PencilKit and Mac Catalyst quirks. If you're hacking on the canvas (Shift-snap, undo, the red-marker underlay, etc.), please skim [`CLAUDE.md`](CLAUDE.md) first — it documents the design decisions and the traps you'll re-discover otherwise.
+
+> _`CLAUDE.md` is currently in Japanese; an English translation PR is welcome._
+
+## Contributing
+
+Issues and pull requests are very welcome — AIPeek is in active development. Before opening a non-trivial PR, please file an issue so we can talk about scope and direction.
+
+Start here: [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
+## License
+
+AIPeek is released under the [MIT License](LICENSE).
+
+## Acknowledgments
+
+Built on Apple's [PencilKit](https://developer.apple.com/documentation/pencilkit), [SwiftUI](https://developer.apple.com/xcode/swiftui/), and [Mac Catalyst](https://developer.apple.com/mac-catalyst/). Inspired by daily use of [Claude Code](https://www.anthropic.com/claude-code) and other AI chat tools.
