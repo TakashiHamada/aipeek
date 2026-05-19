@@ -42,7 +42,7 @@ struct ContentView: View {
             // toolTooltip is applied LAST so the overlay chip stays at full
             // opacity even when the button is dimmed by `.opacity(0.55)`
             // (otherwise the chip inherits the parent's faded opacity).
-            .toolTooltip("Copy drawing to clipboard (⌘S)")
+            .toolTooltip("Copy drawing to clipboard (⌘S) — auto-copy options in Preferences (⌘,)")
             .padding(.top, 12)
             .padding(.leading, 16)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
